@@ -526,7 +526,7 @@ if (!navigator.clipboard) Object.defineProperty(navigator, 'clipboard', { value:
 </script>
 </head>
 
-<body class="antialiased" style="padding-top: calc(6.5rem + env(safe-area-inset-top, 0px)); padding-bottom: calc(2rem + env(safe-area-inset-bottom, 0px));">
+<body class="antialiased" style="padding-top: calc(7.5rem + env(safe-area-inset-top, 0px)); padding-bottom: calc(2rem + env(safe-area-inset-bottom, 0px));">
 <div style="background:#7f1d1d;color:#fff;text-align:center;padding:6px 10px;font-size:12px;font-weight:600;">USO PRIVADO Y PERSONAL — Acceso no autorizado prohibido. Solo contenido propio/con permisos.</div>
 
 <div id="update-banner" class="hidden fixed top-0 left-0 right-0 z-[60] px-3 pt-3 pointer-events-none">
@@ -548,7 +548,7 @@ if (!navigator.clipboard) Object.defineProperty(navigator, 'clipboard', { value:
   glass-panel glass-nav glass-pill px-4 sm:px-5 py-2.5
   grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 sm:gap-4
   transition-all duration-300"
-  style="top: calc(0.75rem + env(safe-area-inset-top, 0px));">
+  style="top: calc(env(safe-area-inset-top, 0px) + 1rem);">
     <a href="/" class="flex items-center gap-3 shrink-0">
         <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center shadow-[0_0_15px_var(--primary)]">
             <i class="fa-solid fa-play text-white text-xs"></i>
@@ -640,7 +640,7 @@ if (!navigator.clipboard) Object.defineProperty(navigator, 'clipboard', { value:
                 </div>
             </div>
         {% else %}
-            <a href="/login" class="bg-primary hover:bg-primary/80 text-white px-6 py-2 rounded-full text-sm font-bold transition shadow-lg shadow-primary/20">
+            <a href="/login" class="bg-primary hover:bg-primary/80 text-white px-6 min-h-[44px] inline-flex items-center justify-center rounded-full text-sm font-bold transition shadow-lg shadow-primary/20">
                 Login
             </a>
         {% endif %}
@@ -884,8 +884,8 @@ if(navContainer) {
             banner.classList.remove('hidden');
             requestAnimationFrame(() => {
                 const h = banner.offsetHeight || 72;
-                navbar.style.top = `calc(${h + 12}px + env(safe-area-inset-top, 0px))`;
-                document.body.style.paddingTop = `calc(${h + 88}px + env(safe-area-inset-top, 0px))`;
+                navbar.style.top = `calc(${h + 16}px + env(safe-area-inset-top, 0px))`;
+                document.body.style.paddingTop = `calc(${h + 110}px + env(safe-area-inset-top, 0px))`;
                 if (mainEl) mainEl.style.marginTop = '0';
             });
         } else {
