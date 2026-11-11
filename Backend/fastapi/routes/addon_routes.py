@@ -2190,11 +2190,11 @@ async def get_streams(
                                     "episode_start": episode_start, "name_key": name_key, "sort_name": sort_name,
                                     "behaviorHints": {"bingeGroup": _binge_group(quality_str, suffix)}})
 
-                    if SettingsManager.current().show_proxy_and_non_proxy_both and proxy_url:
-                        add("(Proxy)", proxy_url, True)
-                        add("(Direct)", original_url)
-                    else:
-                        add("", proxy_url or original_url, bool(proxy_url))
+                if SettingsManager.current().show_proxy_and_non_proxy_both and proxy_url:
+                    add("(Proxy)", proxy_url, True)
+                    add("(Direct)", original_url)
+                else:
+                    add("", proxy_url or original_url, bool(proxy_url))
     elif is_global_search_enabled():
         try:
             is_anime = bool(is_kitsu or (media_details and media_details.get("is_anime")))
