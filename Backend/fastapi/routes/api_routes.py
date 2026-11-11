@@ -1725,6 +1725,15 @@ async def get_settings_api() -> dict:
 
 async def update_settings_api(payload: dict) -> dict:
 
+    #----- Ignore settings for features removed from this build
+    for removed_key in (
+        "http_proxy_url", "show_proxy_and_non_proxy_both",
+        "mediaflow_proxy", "mediaflow_password",
+        "subscription", "subscription_group_id", "approver_ids",
+        "payment_instructions", "payment_qr_url",
+    ):
+        payload.pop(removed_key, None)
+
     #----- Empty password string means leave it unchanged
     if "admin_password" in payload and not str(payload["admin_password"]).strip():
         del payload["admin_password"]
@@ -1732,7 +1741,7 @@ async def update_settings_api(payload: dict) -> dict:
         del payload["session_secret"]
 
     #----- Type coercion and validation
-    bool_keys = {"replace_mode", "duplicate_protection", "hide_catalog", "subscription", "announce_new_content", "delete_on_metadata_fail", "better_poster_enabled", "rpdb_enabled", "spatial_poster_enabled", "fanart_enabled", "fanart_shuffle", "fanart_low_res_poster"}
+    bool_keys = {"replace_mode", "duplicate_protection", "hide_catalog", "announce_new_content", "delete_on_metadata_fail", "better_poster_enabled", "rpdb_enabled", "spatial_poster_enabled", "fanart_enabled", "fanart_shuffle", "fanart_low_res_poster"}
     for key in bool_keys:
         if key in payload:
             payload[key] = bool(payload[key])

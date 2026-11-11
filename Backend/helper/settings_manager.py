@@ -22,11 +22,6 @@ _DEFAULTS: Dict[str, Any] = {
     "admin_username": "admin",
     "admin_password": "admin",
     "session_secret": "",
-    "subscription": False,
-    "subscription_group_id": 0,
-    "approver_ids": [],
-    "payment_instructions": "",
-    "payment_qr_url": "",
     "webdav_user": "",
     "webdav_password": "",
     "multi_tokens": [],
@@ -58,6 +53,21 @@ _DEFAULTS: Dict[str, Any] = {
 }
 
 
+#----- Keys for features removed from this build; dropped from the snapshot so they
+#----- can never be re-enabled or exposed through the settings API.
+_LEGACY_KEYS = {
+    "http_proxy_url",
+    "show_proxy_and_non_proxy_both",
+    "mediaflow_proxy",
+    "mediaflow_password",
+    "subscription",
+    "subscription_group_id",
+    "approver_ids",
+    "payment_instructions",
+    "payment_qr_url",
+}
+
+
 #----- Read legacy Telegram config env values; used only on FIRST startup
 def _seed_from_env() -> Dict[str, Any]:
     seed = dict(_DEFAULTS)
@@ -73,9 +83,6 @@ def _seed_from_env() -> Dict[str, Any]:
         "admin_username":               Telegram.ADMIN_USERNAME,
         "admin_password":               hash_password(Telegram.ADMIN_PASSWORD),
         "session_secret":               secrets.token_hex(32),
-        "subscription":                 Telegram.SUBSCRIPTION,
-        "subscription_group_id":        Telegram.SUBSCRIPTION_GROUP_ID,
-        "approver_ids":                 list(Telegram.APPROVER_IDS),
         "global_search_channels":       [],
         "multi_tokens":                 [],
         "extra_databases":              list(Telegram.DATABASE[2:]) if len(Telegram.DATABASE) > 2 else [],
@@ -89,7 +96,10 @@ class Settings:
 
     def __init__(self, data: Dict[str, Any]) -> None:
         merged = dict(_DEFAULTS)
-        merged.update({k: v for k, v in data.items() if k != "_id"})
+        merged.update({
+            k: v for k, v in data.items()
+            if k != "_id" and k not in _LEGACY_KEYS
+        })
         self._d = merged
 
     #----- Booleans
