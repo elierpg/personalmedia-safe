@@ -22,7 +22,8 @@ from Backend.pyrofork.bot import client_avg_mbps, client_dc_map, client_failures
 
 ACTIVE_STREAMS: Dict[str, Dict] = {}
 RECENT_STREAMS = deque(maxlen=20)
-STALE_STREAM_IDLE = 180
+STALE_STREAM_IDLE = 300
+CANCELLED_PRUNE = 5
 _STALE_CLEANER_STARTED = False
 
 
@@ -37,7 +38,10 @@ async def _cleanup_stale_streams():
                 status = entry.get("status") or "active"
                 total = entry.get("total_bytes") or 0
                 idle = now - last
-                if status != "active" or idle > STALE_STREAM_IDLE or (total == 0 and idle > 60):
+                ended = entry.get("end_ts") or last
+                if status in ("cancelled", "error", "finished", "idle") and (now - ended) > CANCELLED_PRUNE:
+                    stale.append(sid)
+                elif idle > STALE_STREAM_IDLE or (total == 0 and idle > 60):
                     stale.append(sid)
             for sid in stale:
                 try:

@@ -13,6 +13,7 @@ from fastapi.responses import Response as PlainResponse
 from fastapi.responses import StreamingResponse
 
 from Backend import db
+from Backend.fastapi.security.credentials import require_auth
 from Backend.fastapi.security.tokens import verify_token
 from Backend.helper.bounded import BoundedDict
 from Backend.helper.analytics import client_ip_from, record_stream_start
@@ -655,29 +656,24 @@ async def db_zip_media_streamer(request: Request, parts_payload: list, token: st
 
 #----- Live and recent stream telemetry, pruning stale active entries
 @router.get("/stream/stats")
-async def get_stream_stats():
+async def get_stream_stats(_: bool = Depends(require_auth)):
     now = time.time()
-    PRUNE_SECONDS = 3
-    INACTIVE_TIMEOUT = 15
+    PRUNE_SECONDS = 5
+    #----- A player may pause to buffer between range requests. Keep a stream visible
+    #----- while its last chunk was recent; only drop it after a generous idle window.
+    INACTIVE_TIMEOUT = 120
     for sid, info in list(ACTIVE_STREAMS.items()):
         status = info.get("status", "active")
-        current_bytes = info.get("total_bytes", 0)
-        if "last_bytes" not in info:
-            info["last_bytes"] = current_bytes
-            info["last_activity_ts"] = now
-        if current_bytes > info["last_bytes"]:
-            info["last_bytes"] = current_bytes
-            info["last_activity_ts"] = now
-            info["status"] = "active"
-        else:
-            if now - info["last_activity_ts"] > INACTIVE_TIMEOUT:
-                if status == "active":
-                    info["status"] = "cancelled"
-                    info["end_ts"] = now
-        if info.get("status") in ("cancelled", "error", "finished", "inactive"):
-            last_ts = info.get("end_ts", info.get("last_activity_ts", now))
-            if now - last_ts > PRUNE_SECONDS:
+        last_ts = info.get("last_ts") or info.get("start_ts") or now
+        idle = now - last_ts
+        if status == "active" and idle > INACTIVE_TIMEOUT:
+            info["status"] = "idle"
+            info["end_ts"] = now
+        if info.get("status") in ("cancelled", "error", "finished", "idle", "inactive"):
+            ended = info.get("end_ts") or last_ts
+            if now - ended > PRUNE_SECONDS:
                 try:
+                    info["stream_id"] = sid
                     RECENT_STREAMS.appendleft(ACTIVE_STREAMS.pop(sid))
                 except KeyError:
                     pass
@@ -697,6 +693,8 @@ async def get_stream_stats():
             "avg_mbps": round(info.get("avg_mbps", 0.0), 3),
             "peak_mbps": round(info.get("peak_mbps", 0.0), 3),
             "start_ts": info.get("start_ts"),
+            "last_ts": info.get("last_ts"),
+            "user_name": info.get("meta", {}).get("user_name"),
         }
         for sid, info in ACTIVE_STREAMS.items()
     ]
@@ -728,7 +726,7 @@ async def get_stream_stats():
 
 #----- Detailed telemetry for a single stream id
 @router.get("/stream/stats/{stream_id}")
-async def get_stream_detail(stream_id: str):
+async def get_stream_detail(stream_id: str, _: bool = Depends(require_auth)):
     info = ACTIVE_STREAMS.get(stream_id)
     if info:
         return JSONResponse(make_json_safe(info))

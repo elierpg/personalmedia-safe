@@ -591,79 +591,6 @@
         </div>
     </div>
 
-    <!-- ── Subscription ────────────────────────────────────────────────── -->
-    <div class="settings-card">
-        <h2><i class="fa-solid fa-credit-card"></i> Subscription</h2>
-        <label class="toggle-wrap" style="margin-bottom:1.25rem">
-            <input type="checkbox" class="toggle-input" id="subscription"
-                {% if settings.subscription %}checked{% endif %}
-                onchange="toggleSubFields()">
-            <span class="toggle-track"></span>
-            <span class="toggle-label">
-                <strong>Enable Subscription System</strong>
-                <span style="color:var(--text-sec);font-size:0.8rem;display:block">
-                    Restringir el acceso to subscribed members
-                </span>
-            </span>
-        </label>
-
-        <div id="sub-fields" style="{% if not settings.subscription %}display:none{% endif %}">
-            <div style="margin-bottom:1rem">
-                <label class="s-label" for="subscription_group_id">Subscription Group ID</label>
-                <input type="number" id="subscription_group_id" class="s-input"
-                    value="{{ settings.subscription_group_id }}"
-                    placeholder="-100xxxxxxxx">
-                <span style="color:var(--text-sec);font-size:0.78rem;display:block;margin-top:0.4rem">
-                    Users are pointed back to your bot automatically for renewals and joining.
-                </span>
-            </div>
-
-            <!-- Payment method -->
-            <div style="margin-bottom:1rem">
-                <label class="s-label" for="payment_instructions">Payment Instructions
-                    <span style="font-weight:400;text-transform:none;letter-spacing:0">
-                        — shown to users when they pick a plan (UPI ID, bank details, etc.)</span>
-                </label>
-                <textarea id="payment_instructions" class="s-input" rows="4"
-                    placeholder="e.g. UPI: yourname@okhdfcbank&#10;Or PayPal: you@example.com&#10;After paying, send the screenshot here.">{{ settings.payment_instructions }}</textarea>
-            </div>
-            <div style="margin-bottom:1rem">
-                <label class="s-label" for="payment_qr_url">Payment QR Image URL
-                    <span style="font-weight:400;text-transform:none;letter-spacing:0">
-                        — optional; if set, the bot sends this QR image with the plan</span>
-                </label>
-                <input type="url" id="payment_qr_url" class="s-input"
-                    value="{{ settings.payment_qr_url }}"
-                    placeholder="https://.../upi-qr.png">
-            </div>
-
-            <!-- Approver IDs -->
-            <label class="s-label">APPROVER_IDS
-                <span style="font-weight:400;text-transform:none;letter-spacing:0">
-                    — Telegram user IDs allowed to approve subscriptions</span>
-            </label>
-            <div class="multi-list-items" id="approver_ids_items">
-                {% for uid in settings.approver_ids %}
-                <div class="multi-item">
-                    <input type="number" class="s-input" value="{{ uid }}" data-list="approver_ids">
-                    <button class="remove-btn" onclick="removeItem(this)" title="Remove">
-                        <i class="fa-solid fa-xmark"></i>
-                    </button>
-                </div>
-                {% endfor %}
-            </div>
-            <div class="add-row">
-                <input type="number" id="approver_ids_new" class="s-input"
-                    placeholder="Telegram user ID (numeric)"
-                    onkeydown="if(event.key==='Enter'){event.preventDefault();addItem('approver_ids')}">
-                <button class="add-btn" onclick="addItem('approver_ids')">+ Add Approver</button>
-            </div>
-        </div>
-    </div>
-
-
-
-
 <!-- ── Telegram User Session ──────────────────────────────────────── -->
 <div class="settings-card">
     <h2><i class="fa-solid fa-user-lock"></i> Telegram User Session</h2>
@@ -1043,59 +970,6 @@ document.addEventListener('DOMContentLoaded', sessLoadStatus);
         </label>
     </div>
 
-    <!-- ── Proxy ───────────────────────────────────────────────────────── -->
-    <div class="settings-card">
-        <h2><i class="fa-solid fa-network-wired"></i> Proxy Settings</h2>
-        <div style="margin-bottom:1rem">
-            <label class="s-label" for="http_proxy_url">HTTP Proxy URL</label>
-            <input type="url" id="http_proxy_url" class="s-input"
-                value="{{ settings.http_proxy_url }}"
-                placeholder="http://user:pass@host:port or leave empty"
-                oninput="toggleMediaflowFields()">
-        </div>
-
-        <div id="mediaflow-wrap" style="{% if not settings.http_proxy_url %}display:none{% endif %}">
-            <label class="toggle-wrap" style="margin-bottom:1rem">
-                <input type="checkbox" class="toggle-input" id="mediaflow_proxy"
-                    {% if settings.mediaflow_proxy %}checked{% endif %}
-                    onchange="toggleMediaflowFields()">
-                <span class="toggle-track"></span>
-                <span class="toggle-label">
-                    <strong>MediaFlow Proxy</strong>
-                    <span style="color:var(--text-sec);font-size:0.8rem;display:block">
-                        Wrap elementos as <code>/proxy/elemento?d=&lt;url&gt;&amp;api_password=&lt;pass&gt;</code>
-                    </span>
-                </span>
-            </label>
-            <div id="mediaflow-password-wrap"
-                 style="margin-bottom:1rem;{% if not settings.mediaflow_proxy %}display:none{% endif %}">
-                <label class="s-label" for="mediaflow_password">MediaFlow API Password</label>
-                <div style="position:relative">
-                    <input type="password" id="mediaflow_password" class="s-input"
-                        value="{{ settings.mediaflow_password }}"
-                        placeholder="api_password" style="padding-right:2.5rem"
-                        autocomplete="off" spellcheck="false">
-                    <button type="button" onclick="toggleMfPwdVisibility()"
-                        style="position:absolute;right:0.75rem;top:50%;transform:translateY(-50%);
-                               background:none;border:none;color:var(--text-sec);cursor:pointer">
-                        <i class="fa-solid fa-eye" id="mf-eye-icon"></i>
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <label class="toggle-wrap">
-            <input type="checkbox" class="toggle-input" id="show_proxy_and_non_proxy_both"
-                {% if settings.show_proxy_and_non_proxy_both %}checked{% endif %}>
-            <span class="toggle-track"></span>
-            <span class="toggle-label">
-                <strong>Show Proxy &amp; Non-Proxy Elementos</strong>
-                <span style="color:var(--text-sec);font-size:0.8rem;display:block">
-                    Expose both proxied and enlaces directos
-                </span>
-            </span>
-        </label>
-    </div>
 <!-- ── WebDAV ──────────────────────────────────────────────────────── -->
     <div class="settings-card">
         <h2><i class="fa-solid fa-hard-drive"></i> WebDAV</h2>
@@ -1227,7 +1101,7 @@ document.addEventListener('DOMContentLoaded', sessLoadStatus);
     <div class="settings-card">
         <h2><i class="fa-solid fa-box-archive"></i> Backup &amp; Restore</h2>
         <p class="bk-desc">
-            Export everything — settings, custom catalogs, subscription plans and access tokens — to a JSON file,
+            Export everything — settings, custom catalogs and access tokens — to a JSON file,
             or restore from one. Passwords and the session secret are never exported, but the file can hold bot
             tokens and database URIs, so keep it private.
         </p>
@@ -1294,12 +1168,6 @@ function toggleDuplicateProtection() {
     wrap.style.pointerEvents = replaceOn ? 'none' : '';
 }
 
-/* ── Toggle sub-fields visibility ─────────────────────────────────────── */
-function toggleSubFields() {
-    const enabled = document.getElementById('subscription').checked;
-    document.getElementById('sub-fields').style.display = enabled ? '' : 'none';
-}
-
 function toggleGlobalSearchFields() {
     const enabled = document.getElementById('global_search').checked;
     const fields = document.getElementById('global-search-fields');
@@ -1314,28 +1182,6 @@ function toggleAnnouncementFields() {
     const fields = document.getElementById('announcement-fields');
     if (fields) {
         fields.style.display = enabled ? '' : 'none';
-    }
-}
-
-function toggleMediaflowFields() {
-    const hasProxy = document.getElementById('http_proxy_url').value.trim() !== '';
-    const wrap = document.getElementById('mediaflow-wrap');
-    const toggle = document.getElementById('mediaflow_proxy');
-    if (wrap) wrap.style.display = hasProxy ? '' : 'none';
-    if (!hasProxy && toggle) toggle.checked = false;
-    const pwdWrap = document.getElementById('mediaflow-password-wrap');
-    if (pwdWrap) pwdWrap.style.display = (hasProxy && toggle.checked) ? '' : 'none';
-}
-
-function toggleMfPwdVisibility() {
-    const input = document.getElementById('mediaflow_password');
-    const icon = document.getElementById('mf-eye-icon');
-    if (input.type === 'password') {
-        input.type = 'text';
-        icon.className = 'fa-solid fa-eye-slash';
-    } else {
-        input.type = 'password';
-        icon.className = 'fa-solid fa-eye';
     }
 }
 
@@ -1662,15 +1508,6 @@ async function saveSettings() {
             upstream_branch:               val('upelemento_branch').trim(),
             auth_channels:                 collectList('auth_channels'),
             anime_channels:                collectAnimeChannels(),
-            subscription:                  checked('subscription'),
-            subscription_group_id:         parseInt(val('subscription_group_id', '0'), 10) || 0,
-            payment_instructions:          val('payment_instructions').trim(),
-            payment_qr_url:                val('payment_qr_url').trim(),
-            approver_ids:                  collectList('approver_ids').map(Number).filter(n => !isNaN(n)),
-            http_proxy_url:                val('http_proxy_url').trim(),
-            show_proxy_and_non_proxy_both: checked('show_proxy_and_non_proxy_both'),
-            mediaflow_proxy:               checked('mediaflow_proxy'),
-            mediaflow_password:            val('mediaflow_password'),
             cf_stream_url:                 val('cf_elemento_url').trim(),
             cf_stream_secret:              val('cf_elemento_secret').trim(),
             webdav_user:                   val('webdav_user').trim(),
@@ -1797,14 +1634,11 @@ function renderSettings(s) {
     setChk('duplicate_protection', s.duplicate_protection);
     try { toggleDuplicateProtection(); } catch(e){}
     setChk('hide_catalog', s.hide_catalog);
-    setChk('subscription', s.subscription);
-    setChk('show_proxy_and_non_proxy_both', s.show_proxy_and_non_proxy_both);
     setChk('global_search', s.global_search);
     const dsEl = document.getElementById('default_elementoing');
     if (dsEl) dsEl.checked = (s.default_streaming || s.default_elementoing) === 'userbot';
     setChk('announce_new_content', s.announce_new_content);
     setChk('delete_on_metadata_fail', s.delete_on_metadata_fail);
-    try { toggleSubFields(); } catch(e){}
     try { toggleGlobalSearchFields(); } catch(e){}
     try { toggleAnnouncementFields(); } catch(e){}
 
@@ -1833,19 +1667,13 @@ function renderSettings(s) {
     try { toggleFanartShuffle(); } catch(e){}
     setVal('upelemento_repo', s.upstream_repo || s.upelemento_repo || '');
     setVal('upelemento_branch', s.upstream_branch || s.upelemento_branch || '');
-    setVal('subscription_group_id', s.subscription_group_id || 0);
-    setVal('http_proxy_url', s.http_proxy_url || '');
-    setChk('mediaflow_proxy', s.mediaflow_proxy);
-    setVal('mediaflow_password', s.mediaflow_password || '');
     setVal('cf_elemento_url', s.cf_stream_url || s.cf_elemento_url || '');
     setVal('cf_elemento_secret', s.cf_stream_secret || s.cf_elemento_secret || '');
     setVal('webdav_user', s.webdav_user || '');
     setVal('webdav_password', s.webdav_password || '');
-    try { toggleMediaflowFields(); } catch(e){}
 
     const titles = s.channel_titles || {};
     try { rebuildAuthChannels(s.auth_channels, s.anime_channels, titles); } catch(e){}
-    try { rebuildSimpleList('approver_ids_items', s.approver_ids, 'number'); } catch(e){}
     try { rebuildSimpleList('multi_tokens_items', s.multi_tokens, 'text'); } catch(e){}
     try { rebuildSimpleList('global_search_channels_items', s.global_search_channels, 'text', titles); } catch(e){}
     try { rebuildSimpleList('manual_channels_items', s.manual_channels, 'text', titles); } catch(e){}

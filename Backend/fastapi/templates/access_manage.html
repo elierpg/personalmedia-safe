@@ -142,7 +142,7 @@
                 </div>
                 <h1 class="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight section-title">Tokens &amp; Access</h1>
                 <p class="mt-2 text-sm sm:text-base section-muted max-w-2xl">
-                    One place for everything: create addon tokens, set data limits, mark lifetime access, link users and manage subscriptions.
+                    One place for everything: create addon tokens, set data limits, mark lifetime access and link users.
                 </p>
             </div>
 
@@ -748,7 +748,6 @@
         if (e.key === 'Escape') ['create-modal', 'limits-modal', 'assign-modal', 'sub-action-modal'].forEach(closeModal);
     });
 
-    loadPlans();
     loadTokens();
 </script>
 {% endblock %}

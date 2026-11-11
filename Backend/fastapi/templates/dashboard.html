@@ -565,14 +565,21 @@
 
             elementoState.activeElementos = activeElementos;
 
+            const sysLive = document.getElementById('sys-live-elementos');
+            if (sysLive) sysLive.textContent = activeElementos.length + ' Active';
             if (liveCount) liveCount.textContent = activeElementos.length + ' Active';
             if (liveNowCount) liveNowCount.textContent = String(activeElementos.length);
             if (recentCount) recentCount.textContent = String(recentElementos.length);
 
             if (activeContainer) {
+                const lastPlayed = recentElementos.length ? getElementoTitle(recentElementos[0]) : '';
                 activeContainer.innerHTML = activeElementos.length
                     ? activeElementos.map(elemento => renderElementoCard(elemento)).join('')
-                    : renderEmptyState('fa-solid fa-satellite-dish', 'No active elementos right now', 'The live network is idle at the moment.');
+                    : renderEmptyState(
+                        'fa-solid fa-satellite-dish',
+                        'No active elementos right now',
+                        lastPlayed ? `Last activity: ${lastPlayed}` : 'The live network is idle at the moment.'
+                    );
             }
         } catch (error) {
             console.error(error);
@@ -624,7 +631,7 @@
     document.addEventListener('DOMContentLoaded', () => {
         loadElementoStats();
         loadSetupStatus();
-        setInterval(loadElementoStats, 30000);
+        setInterval(loadElementoStats, 10000);
         setInterval(refreshLiveDurations, 1000);
     });
 

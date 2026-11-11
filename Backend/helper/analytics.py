@@ -1,5 +1,5 @@
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import httpx
 
@@ -246,7 +246,9 @@ async def get_activity_overview(page: int = 1, per_page: int = 5) -> dict:
         online = token in playing
         if not online and last:
             try:
-                online = last >= cutoff
+                if last.tzinfo is None:
+                    last = last.replace(tzinfo=timezone.utc)
+                online = last >= cutoff.replace(tzinfo=timezone.utc)
             except Exception:
                 online = False
         rows.append({

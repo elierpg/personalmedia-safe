@@ -399,33 +399,33 @@
 
     function renderInsights(d) {
         const s = d.summary || {};
-        insText('ins-total-elementos', s.total_elementos ?? 0);
+        insText('ins-total-elementos', s.total_elementos ?? s.total_streams ?? 0);
         insText('ins-total-data', fmtBytes(s.total_bytes));
         insText('ins-avg-speed', (Number(s.avg_speed || 0)).toFixed(1) + ' MB/s');
         insText('ins-active-users', s.active_users ?? 0);
 
         const titles = d.top_titles || [];
-        const maxT = Math.max(1, ...titles.map(t => t.elementos || 0));
+        const maxT = Math.max(1, ...titles.map(t => (t.elementos ?? t.streams) || 0));
         document.getElementById('ins-top-titles').innerHTML = titles.length
-            ? titles.map(t => insRow(t.title || '—', `${t.elementos} plays · ${fmtBytes(t.total_bytes)}`, t.elementos / maxT)).join('')
+            ? titles.map(t => { const plays = t.elementos ?? t.streams ?? 0; return insRow(t.title || '—', `${plays} plays · ${fmtBytes(t.total_bytes)}`, plays / maxT); }).join('')
             : '<div class="ins-empty">Sin datos todavía.</div>';
 
         const users = d.top_users || [];
         const maxU = Math.max(1, ...users.map(u => u.total_bytes || 0));
         document.getElementById('ins-top-users').innerHTML = users.length
-            ? users.map(u => insRow(u.user || '—', `${fmtBytes(u.total_bytes)} · ${u.elementos} streams`, u.total_bytes / maxU)).join('')
+            ? users.map(u => { const plays = u.elementos ?? u.streams ?? 0; return insRow(u.user || '—', `${fmtBytes(u.total_bytes)} · ${plays} streams`, u.total_bytes / maxU); }).join('')
             : '<div class="ins-empty">Sin datos todavía.</div>';
 
         const days = d.per_day || [];
-        const maxD = Math.max(1, ...days.map(x => x.elementos || 0));
+        const maxD = Math.max(1, ...days.map(x => (x.elementos ?? x.streams) || 0));
         document.getElementById('ins-per-day').innerHTML = days.length
-            ? days.map(x => insRow(x.date, `${x.elementos} · ${fmtBytes(x.total_bytes)}`, x.elementos / maxD)).join('')
+            ? days.map(x => { const plays = x.elementos ?? x.streams ?? 0; return insRow(x.date, `${plays} · ${fmtBytes(x.total_bytes)}`, plays / maxD); }).join('')
             : '<div class="ins-empty">Sin datos todavía.</div>';
     }
 
     async function fetchAnalytics() {
         try {
-            const res = await fetch('/api/admin/elemento-analytics');
+            const res = await fetch('/api/admin/stream-analytics');
             const tbody = document.getElementById('analytics-tbody');
             const mobile = document.getElementById('analytics-mobile');
 
@@ -463,7 +463,7 @@
 
                 tableHtml += `
                     <tr>
-                        <td><span class="elemento-id muted font-mono text-xs" title="${escapeHtml(s.elemento_id)}">${escapeHtml(s.elemento_id)}</span></td>
+                        <td><span class="elemento-id muted font-mono text-xs" title="${escapeHtml(s.elemento_id || s.stream_id)}">${escapeHtml(s.elemento_id || s.stream_id || '—')}</span></td>
                         <td><div class="title-cell font-semibold" title="${escapeHtml(titleStr)}">${escapeHtml(titleStr)}</div></td>
                         <td style="text-align:center">Bot ${Number(s.client_index ?? 0) + 1} <span class="muted text-xs">(DC${escapeHtml(s.dc_id)})</span></td>
                         <td style="text-align:right;font-weight:600">${bytesStr}</td>

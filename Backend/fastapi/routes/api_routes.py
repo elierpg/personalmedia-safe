@@ -27,19 +27,11 @@ from Backend.helper.auto_catalog import (
     update_auto_catalog_settings,
 )
 from Backend.helper.backup import export_config, import_config
-from Backend.helper.custom_dl import ByteStreamer, _speed_test_single_client, run_speed_test
+from Backend.helper.custom_dl import ACTIVE_STREAMS, RECENT_STREAMS, ByteStreamer, _speed_test_single_client, run_speed_test
 from Backend.helper.encrypt import decode_string, encode_string
 from Backend.helper.health import run_health_checks
 from Backend.helper.manual_add import resolve_telegram_message, retag_media, stamp_caption_by_ref
 from Backend.helper.pyro import resolve_video_thumb_url
-from Backend.helper.requests_manager import (
-    delete_request,
-    list_requests,
-    popular_pending,
-    search_titles,
-    set_status,
-    submit_request,
-)
 from Backend.helper.metadata import (
     build_id_link,
     extract_default_id,
@@ -117,6 +109,7 @@ async def get_system_stats_api():
         total_movies, total_tv_shows = db.content_totals(db_stats)
         api_tokens = await db.get_all_api_tokens()
         
+        active_count = len(ACTIVE_STREAMS)
         return {
             "server_status": "running",
             "uptime": get_readable_time(time() - StartTime),
@@ -128,7 +121,11 @@ async def get_system_stats_api():
             "databases": db_stats,
             "total_databases": len(db_stats),
             "current_db_index": db.current_db_index,
-            "api_tokens": api_tokens
+            "api_tokens": api_tokens,
+            "total_active_elementos": active_count,
+            "total_active_streams": active_count,
+            "total_recent_elementos": len(RECENT_STREAMS),
+            "total_recent_streams": len(RECENT_STREAMS),
         }
     except Exception as e:
         print(f"System Stats API Error: {e}")
@@ -625,61 +622,6 @@ async def clear_stream_analytics_api() -> dict:
         }
     except Exception as e:
         return {"status": "error", "message": str(e)}
-
-
-#----- Public: search titles to request (by name, IMDb id or TMDB id)
-async def request_search_api(q: str) -> dict:
-    try:
-        return {"status": "success", "data": await search_titles(q)}
-    except Exception as e:
-        LOGGER.error(f"Request search error: {e}")
-        return {"status": "error", "message": str(e), "data": []}
-
-
-#----- Public: submit a request for a title
-async def request_submit_api(payload: dict, client_ip: str) -> dict:
-    result = await submit_request(
-        media_type=payload.get("media_type"),
-        tmdb_id=payload.get("tmdb_id"),
-        imdb_id=payload.get("imdb_id"),
-        title=payload.get("title"),
-        year=payload.get("year"),
-        poster=payload.get("poster"),
-        client_ip=client_ip,
-    )
-    return {"status": "success" if result.get("ok") else "error", **result}
-
-
-#----- Public: most-requested pending titles
-async def request_popular_api() -> dict:
-    try:
-        return {"status": "success", "data": await popular_pending()}
-    except Exception as e:
-        return {"status": "error", "message": str(e), "data": []}
-
-
-#----- Admin: list all content requests
-async def get_requests_api() -> dict:
-    try:
-        return {"status": "success", "data": await list_requests()}
-    except Exception as e:
-        LOGGER.error(f"Requests API error: {e}")
-        return {"status": "error", "message": str(e)}
-
-
-#----- Admin: uploaded / denied / banned / pending
-async def update_request_api(request_id: str, payload: dict) -> dict:
-    new_status = str(payload.get("status", "")).strip()
-    doc = await set_status(request_id, new_status)
-    if not doc:
-        raise HTTPException(status_code=404, detail="Request not found or invalid status.")
-    return {"status": "success", "data": doc}
-
-
-async def delete_request_api(request_id: str) -> dict:
-    if not await delete_request(request_id):
-        raise HTTPException(status_code=404, detail="Request not found.")
-    return {"status": "success", "message": "Request deleted."}
 
 
 #----- Admin subscription management
@@ -1790,7 +1732,7 @@ async def update_settings_api(payload: dict) -> dict:
         del payload["session_secret"]
 
     #----- Type coercion and validation
-    bool_keys = {"replace_mode", "duplicate_protection", "hide_catalog", "subscription", "show_proxy_and_non_proxy_both", "mediaflow_proxy", "announce_new_content", "delete_on_metadata_fail", "better_poster_enabled", "rpdb_enabled", "spatial_poster_enabled", "fanart_enabled", "fanart_shuffle", "fanart_low_res_poster"}
+    bool_keys = {"replace_mode", "duplicate_protection", "hide_catalog", "subscription", "announce_new_content", "delete_on_metadata_fail", "better_poster_enabled", "rpdb_enabled", "spatial_poster_enabled", "fanart_enabled", "fanart_shuffle", "fanart_low_res_poster"}
     for key in bool_keys:
         if key in payload:
             payload[key] = bool(payload[key])
@@ -1970,9 +1912,8 @@ async def update_settings_api(payload: dict) -> dict:
 
     #----- Strip whitespace from string fields
     for key in ("tmdb_api", "base_url", "upstream_repo", "upstream_branch",
-                "admin_username", "admin_password", "session_secret", "http_proxy_url",
-                
-                "mediaflow_password", "payment_instructions", "payment_qr_url",
+                "admin_username", "admin_password", "session_secret",
+                "payment_instructions", "payment_qr_url",
                 "announcement_channel", "skip_channel"):
         if key in payload and isinstance(payload[key], str):
             payload[key] = payload[key].strip()

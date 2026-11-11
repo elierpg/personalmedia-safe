@@ -163,18 +163,6 @@ async def _external_meta_for_id(id: str, parsed: dict, media_type: str) -> Optio
         LOGGER.warning(f"[EXTERNAL META] Failed to resolve fallback meta for {id}: {exc}")
     return None
 
-def build_proxy_url(original_url: str) -> str | None:
-    settings = SettingsManager.current()
-    base = settings.http_proxy_url
-    if not base:
-        return None
-    if settings.mediaflow_proxy:
-        url = f"{base.rstrip('/')}/proxy/stream?d={quote(original_url, safe='')}"
-        if settings.mediaflow_password:
-            url += f"&api_password={quote(settings.mediaflow_password, safe='')}"
-        return url
-    return f"{base}{original_url}"
-
 _membership_cache: dict = {}
 _MEMBERSHIP_TTL = 60
 _MEMBERSHIP_CACHE_MAX = 5000
@@ -1718,7 +1706,7 @@ async def get_meta(token: str, media_type: str, id: str, token_data: dict = Depe
         projection={"telegram": 0, "seasons.episodes.telegram": 0}
     )
     if not media:
-        fallback_meta = await _cached_external_meta(id, parsed, media_type)
+        fallback_meta = await _external_meta_for_id(id, parsed, media_type)
         return {"meta": fallback_meta or {}}
 
     if not _token_can_view(media.get("visibility") or "public", media.get("allowed_tokens") or [], token_data):
@@ -2171,7 +2159,6 @@ async def get_streams(
 
                 sort_name = stream_name
                 original_url = f"{SettingsManager.current().base_url}/dl/{token}/{quality.get('id')}/video.mkv"
-                proxy_url = build_proxy_url(original_url)
                 cf_url = None
 
                 def add(suffix, url, proxied=False):
@@ -2190,11 +2177,7 @@ async def get_streams(
                                     "episode_start": episode_start, "name_key": name_key, "sort_name": sort_name,
                                     "behaviorHints": {"bingeGroup": _binge_group(quality_str, suffix)}})
 
-                if SettingsManager.current().show_proxy_and_non_proxy_both and proxy_url:
-                    add("(Proxy)", proxy_url, True)
-                    add("(Direct)", original_url)
-                else:
-                    add("", proxy_url or original_url, bool(proxy_url))
+                add("", original_url)
     elif is_global_search_enabled():
         try:
             is_anime = bool(is_kitsu or (media_details and media_details.get("is_anime")))

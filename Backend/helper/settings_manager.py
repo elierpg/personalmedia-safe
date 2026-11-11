@@ -27,10 +27,6 @@ _DEFAULTS: Dict[str, Any] = {
     "approver_ids": [],
     "payment_instructions": "",
     "payment_qr_url": "",
-    "http_proxy_url": "",
-    "show_proxy_and_non_proxy_both": False,
-    "mediaflow_proxy": False,
-    "mediaflow_password": "",
     "webdav_user": "",
     "webdav_password": "",
     "multi_tokens": [],
@@ -81,8 +77,6 @@ def _seed_from_env() -> Dict[str, Any]:
         "subscription_group_id":        Telegram.SUBSCRIPTION_GROUP_ID,
         "approver_ids":                 list(Telegram.APPROVER_IDS),
         "global_search_channels":       [],
-        "http_proxy_url":               Telegram.HTTP_PROXY_URL,
-        "show_proxy_and_non_proxy_both": Telegram.SHOW_PROXY_AND_NON_PROXY_BOTH,
         "multi_tokens":                 [],
         "extra_databases":              list(Telegram.DATABASE[2:]) if len(Telegram.DATABASE) > 2 else [],
     })
@@ -113,15 +107,8 @@ class Settings:
 
     @property
     def subscription(self) -> bool:
-        return bool(self._d["subscription"])
-
-    @property
-    def show_proxy_and_non_proxy_both(self) -> bool:
-        return bool(self._d["show_proxy_and_non_proxy_both"])
-
-    @property
-    def mediaflow_proxy(self) -> bool:
-        return bool(self._d.get("mediaflow_proxy", False))
+        #----- Subscription system removed in this build; always disabled.
+        return False
 
     @property
     def global_search(self) -> bool:
@@ -200,10 +187,6 @@ class Settings:
         return str(self._d.get("session_secret") or "")
 
     @property
-    def http_proxy_url(self) -> str:
-        return str(self._d.get("http_proxy_url") or "")
-
-    @property
     def cf_stream_url(self) -> str:
         return str(self._d.get("cf_stream_url") or "").rstrip("/")
 
@@ -216,10 +199,6 @@ class Settings:
     def cf_stream_mode(self) -> str:
         mode = str(self._d.get("cf_stream_mode") or "off")
         return mode if mode in ("off", "cloudflare", "both") else "off"
-
-    @property
-    def mediaflow_password(self) -> str:
-        return str(self._d.get("mediaflow_password") or "")
 
     @property
     def webdav_user(self) -> str:
@@ -469,11 +448,6 @@ class SettingsManager:
         new_channels = new.get("auth_channels") or []
         if old_channels != new_channels:
             results["auth_channels"] = f"{len(new_channels)} channel(s) saved"
-
-        #----- Proxy settings changed
-        proxy_keys = {"http_proxy_url", "show_proxy_and_non_proxy_both", "mediaflow_proxy", "mediaflow_password"}
-        if any(old.get(k) != new.get(k) for k in proxy_keys):
-            results["proxy"] = "updated — applies to next outbound request"
 
         #----- Cloudflare streaming settings changed (read live per request)
         cf_keys = {"cf_stream_url", "cf_stream_secret", "cf_stream_mode"}

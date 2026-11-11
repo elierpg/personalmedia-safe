@@ -102,11 +102,11 @@ async def dashboard_page(request: Request, _: bool = Depends(require_auth)):
         total_movies, total_tv_shows = db.content_totals(db_stats)
 
         now = time.time()
-        PRUNE_SECONDS = 3
+        PRUNE_SECONDS = 5
         for sid, info in list(ACTIVE_STREAMS.items()):
             status = info.get("status")
             last_ts = info.get("end_ts") or info.get("last_ts") or info.get("start_ts", now)
-            if status in ("cancelled", "error", "finished") and (now - last_ts > PRUNE_SECONDS):
+            if status in ("cancelled", "error", "finished", "idle") and (now - last_ts > PRUNE_SECONDS):
                 info["duration"] = round(now - info.get("start_ts", now), 1)
                 info["stream_id"] = sid
                 try:
@@ -133,6 +133,19 @@ async def dashboard_page(request: Request, _: bool = Depends(require_auth)):
             for stream_id, info in ACTIVE_STREAMS.items()
         ]
 
+        recent_streams_data = []
+        for info in RECENT_STREAMS:
+            recent_streams_data.append({
+                "stream_id": info.get("stream_id"),
+                "elemento_id": info.get("stream_id"),
+                "status": info.get("status", "finished"),
+                "total_bytes": info.get("total_bytes", 0),
+                "duration": info.get("duration"),
+                "meta": info.get("meta", {}),
+                "title": (info.get("meta") or {}).get("title"),
+                "file_name": (info.get("meta") or {}).get("file_name"),
+            })
+
         system_stats = {
             "server_status": "running",
             "uptime": get_readable_time(now - StartTime),
@@ -146,7 +159,11 @@ async def dashboard_page(request: Request, _: bool = Depends(require_auth)):
             "total_databases": len(db_stats),
             "current_db_index": db.current_db_index,
             "active_streams": active_streams_data,
-            "total_active_streams": len(active_streams_data)
+            "total_active_streams": len(active_streams_data),
+            "active_elementos": active_streams_data,
+            "total_active_elementos": len(active_streams_data),
+            "recent_elementos": recent_streams_data,
+            "total_recent_elementos": len(recent_streams_data),
         }
 
     except Exception as e:
@@ -207,32 +224,11 @@ async def edit_media_page(request: Request, tmdb_id: int, db_index: int, media_t
     return templates.TemplateResponse("media_edit.html", ctx)
 
 
-#----- Subscription management shell
-async def admin_subscriptions_page(request: Request, _: bool = Depends(require_auth)):
-    ctx = _base_context(request)
-    ctx["current_user"] = get_current_user(request)
-    return templates.TemplateResponse("subscriptions_manage.html", ctx)
-
-
 #----- Access management shell
 async def admin_access_page(request: Request, _: bool = Depends(require_auth)):
     ctx = _base_context(request)
     ctx["current_user"] = get_current_user(request)
     return templates.TemplateResponse("access_manage.html", ctx)
-
-
-#----- Content requests shell (admin)
-async def admin_requests_page(request: Request, _: bool = Depends(require_auth)):
-    ctx = _base_context(request)
-    ctx["current_user"] = get_current_user(request)
-    return templates.TemplateResponse("requests_manage.html", ctx)
-
-
-#----- Public request page (no auth)
-async def public_request_page(request: Request):
-    ctx = _base_context(request)
-    ctx["is_authenticated"] = is_authenticated(request)
-    return templates.TemplateResponse("request_public.html", ctx)
 
 
 #----- Custom catalogs shell
