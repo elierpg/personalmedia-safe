@@ -674,6 +674,7 @@ async def get_stream_stats(_: bool = Depends(require_auth)):
             if now - ended > PRUNE_SECONDS:
                 try:
                     info["stream_id"] = sid
+                    info.setdefault("duration", round(now - (info.get("start_ts") or now), 1))
                     RECENT_STREAMS.appendleft(ACTIVE_STREAMS.pop(sid))
                 except KeyError:
                     pass

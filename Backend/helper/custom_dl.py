@@ -49,6 +49,7 @@ async def _cleanup_stale_streams():
                     if entry:
                         entry["status"] = "stale"
                         entry["end_ts"] = now
+                        entry.setdefault("duration", round(now - (entry.get("start_ts") or now), 1))
                         RECENT_STREAMS.appendleft(entry)
                         idx = entry.get("client_index")
                         if entry.pop("load_held", False) and idx in work_loads:

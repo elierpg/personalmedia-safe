@@ -267,7 +267,7 @@
                             {{ system_stats.total_active_elementos or 0 }} Active
                         </span>
                     </div>
-                    <p class="text-sm text-text-secondary">Current sessions only</p>
+                    <p class="text-sm text-text-secondary">Live sessions and recent plays</p>
                 </div>
 
                 <div class="p-6 space-y-6 min-w-0">
@@ -284,8 +284,8 @@
 
                     <div class="min-w-0">
                         <div class="flex items-center flex-wrap justify-between gap-2 mb-3 min-w-0">
-                            <h4 class="text-sm font-bold text-text whitespace-nowrap">Active Elementos</h4>
-                            <span class="text-[10px] uppercase tracking-widest text-text-secondary whitespace-nowrap">Real-time</span>
+                            <h4 class="text-sm font-bold text-text whitespace-nowrap">Active &amp; Recent</h4>
+                            <span class="text-[10px] uppercase tracking-widest text-text-secondary whitespace-nowrap">Live feed</span>
                         </div>
                         <div id="active-elementos-container" class="space-y-4 min-w-0">
                             {% if system_stats.active_elementos %}
@@ -395,7 +395,7 @@
 </style>
 
 <script>
-    const elementoState = { activeElementos: [] };
+    const elementoState = { activeElementos: [], displayElementos: [] };
 
     function escapeHtml(unsafe) {
         if (unsafe === null || unsafe === undefined) return '';
@@ -464,6 +464,11 @@
     }
 
     function getLiveDuration(elemento) {
+        const status = String(elemento?.status || '').toLowerCase();
+        if (status !== 'active') {
+            const finished = Number(elemento?.duration || 0);
+            return finished > 0 ? formatDuration(finished) : '—';
+        }
         const startTs = Number(elemento?.start_ts || 0);
         if (!startTs) return '0s';
         return formatDuration(Date.now() / 1000 - startTs);
@@ -563,7 +568,11 @@
             const activeElementos = rawActive.map(normalize);
             const recentElementos = rawRecent.map(normalize);
 
+            //----- When nothing is transferring (player buffered ahead), surface the
+            //----- most recent plays so the panel always reflects real activity.
+            const displayElementos = activeElementos.length ? activeElementos : recentElementos.slice(0, 3);
             elementoState.activeElementos = activeElementos;
+            elementoState.displayElementos = displayElementos;
 
             const sysLive = document.getElementById('sys-live-elementos');
             if (sysLive) sysLive.textContent = activeElementos.length + ' Active';
@@ -573,8 +582,8 @@
 
             if (activeContainer) {
                 const lastPlayed = recentElementos.length ? getElementoTitle(recentElementos[0]) : '';
-                activeContainer.innerHTML = activeElementos.length
-                    ? activeElementos.map(elemento => renderElementoCard(elemento)).join('')
+                activeContainer.innerHTML = displayElementos.length
+                    ? displayElementos.map(elemento => renderElementoCard(elemento)).join('')
                     : renderEmptyState(
                         'fa-solid fa-satellite-dish',
                         'No active elementos right now',
@@ -592,7 +601,7 @@
     function refreshLiveDurations() {
         document.querySelectorAll('#active-elementos-container .elemento-card').forEach((card, index) => {
             const durationEl = card.querySelector('.live-duration');
-            const elemento = elementoState.activeElementos[index];
+            const elemento = elementoState.displayElementos[index] || elementoState.activeElementos[index];
             if (durationEl && elemento) durationEl.textContent = getLiveDuration(elemento);
         });
     }
