@@ -5,6 +5,7 @@ STYLES = {
     "default": {"name": "Default"},
     "glassy": {"name": "Glassy"},
     "neo_brutal": {"name": "Neo Brutalism"},
+    "clean": {"name": "Clean"},
 }
 
 THEMES = {
@@ -187,6 +188,21 @@ THEMES = {
             "text_secondary": "#7A5A2E"
         },
         "css_classes": "theme-golden-hour"
+    },
+    "studio_slate": {
+        "name": "Studio Slate",
+        "is_dark": True,
+        "colors": {
+            "primary": "#2563EB",
+            "secondary": "#1D4ED8",
+            "accent": "#60A5FA",
+            "background": "#0F1115",
+            "card": "#171A21",
+            "border": "#262B36",
+            "text": "#F5F7FA",
+            "text_secondary": "#98A2B3"
+        },
+        "css_classes": "theme-studio-slate"
     }
 }
 

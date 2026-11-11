@@ -479,6 +479,45 @@ textarea:-webkit-autofill {
 }
 
 #mobile-menu { will-change: max-height, opacity; }
+
+/* ── Clean style: modern, flat, no blur/reflections ─────────────────────── */
+html.style-clean body::before {
+    display: none !important;
+}
+html.style-clean .glass-panel,
+html.style-clean .surface-card,
+html.style-clean .glass-nav,
+html.style-clean .glass-card,
+html.style-clean .glass-card-soft {
+    background: var(--card) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04) !important;
+    border: 1px solid var(--hairline) !important;
+}
+html.style-clean .glass-nav {
+    background: color-mix(in srgb, var(--card) 98%, var(--bg)) !important;
+}
+html.style-clean .btn-primary {
+    box-shadow: none !important;
+}
+html.style-clean .btn-primary:hover {
+    filter: brightness(1.06);
+}
+html.style-clean .metric-card::before,
+html.style-clean .reflect,
+html.style-clean [class*="glow"] {
+    display: none !important;
+    filter: none !important;
+}
+html.style-clean #overlay {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+html.style-clean .nav-link:hover {
+    background: var(--surface-2);
+}
+
 </style>
 
 <script>
@@ -530,7 +569,7 @@ if (!navigator.clipboard) Object.defineProperty(navigator, 'clipboard', { value:
 <div style="background:#7f1d1d;color:#fff;text-align:center;padding:6px 10px;font-size:12px;font-weight:600;">USO PRIVADO Y PERSONAL — Acceso no autorizado prohibido. Solo contenido propio/con permisos.</div>
 
 <div id="update-banner" class="hidden fixed top-0 left-0 right-0 z-[60] px-3 pt-3 pointer-events-none">
-  <div class="pointer-events-auto mx-auto max-w-6xl rounded-2xl border border-amber-400/40 bg-amber-500/95 text-black shadow-[0_12px_40px_rgba(0,0,0,0.35)] backdrop-blur-md px-4 py-3 sm:px-5 flex items-start sm:items-center gap-3">
+  <div class="pointer-events-auto mx-auto max-w-6xl rounded-2xl border border-amber-400/40 bg-amber-500/95 text-black shadow-[0_12px_40px_rgba(0,0,0,0.35)] px-4 py-3 sm:px-5 flex items-start sm:items-center gap-3">
     <div class="shrink-0 w-9 h-9 rounded-xl bg-black/15 flex items-center justify-center mt-0.5 sm:mt-0">
       <i class="fa-solid fa-arrow-up text-sm"></i>
     </div>
