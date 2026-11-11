@@ -42,7 +42,6 @@ _chat_title_cache = BoundedDict(500)
 
 _TOKEN_RE = re.compile(r"[a-z0-9]+")
 _MULTIPART_RE = re.compile(r"(?:part|cd|disc|disk)[s._-]*\d+(?=\.\w+$)", re.IGNORECASE)
-_ALT_PART_RE = re.compile(r"^(.*?)[\s._-]*(?:part|cd|disc|disk|pt)[\s._-]*0*(\d{1,3})(?=\.\w+$|$)", re.IGNORECASE)
 _VIDEO_EXTS = (".mkv", ".mp4", ".avi", ".ts", ".m4v", ".mov", ".wmv", ".webm", ".flv")
 SPLIT_SCAN_WINDOW = 20
 _APOSTROPHE_RE = re.compile(r"['\u2018\u2019`\u00B4]")
@@ -393,7 +392,7 @@ async def _search_channel(
                         if parsed is None:
                             continue
                         parts = await _gather_split_parts(client, chat_id, message.id, base)
-                        if len(parts) < 2:
+                        if len(parts) < 2 or sorted(parts) != list(range(1, len(parts) + 1)):
                             continue
                         split_groups[base] = {
                             "parts": parts,
