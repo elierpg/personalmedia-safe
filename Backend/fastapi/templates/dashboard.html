@@ -547,12 +547,21 @@
         const recentCount = document.getElementById('recent-elemento-count');
 
         try {
-            const response = await fetch('/elemento/stats', { cache: 'no-store' });
-            if (!response.ok) throw new Error('Failed to load elemento stats');
+            const response = await fetch('/stream/stats', { cache: 'no-store' });
+            if (!response.ok) throw new Error('Failed to load stream stats');
 
             const data = await response.json();
-            const activeElementos = Array.isArray(data.active_elementos) ? data.active_elementos : [];
-            const recentElementos = Array.isArray(data.recent_elementos) ? data.recent_elementos : [];
+            const rawActive = Array.isArray(data.active_elementos) ? data.active_elementos : (Array.isArray(data.active_streams) ? data.active_streams : []);
+            const rawRecent = Array.isArray(data.recent_elementos) ? data.recent_elementos : (Array.isArray(data.recent_streams) ? data.recent_streams : []);
+            const normalize = (s) => ({
+                ...s,
+                elemento_id: s.elemento_id ?? s.stream_id ?? s.id,
+                title: s.title || s?.meta?.title || s?.file_name || s?.meta?.file_name,
+                file_name: s.file_name || s?.meta?.file_name,
+                status: s.status || 'active',
+            });
+            const activeElementos = rawActive.map(normalize);
+            const recentElementos = rawRecent.map(normalize);
 
             elementoState.activeElementos = activeElementos;
 
