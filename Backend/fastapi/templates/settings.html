@@ -1593,121 +1593,139 @@ function toggleWebdavPwdVisibility() {
 async function saveSettings() {
     const btn   = document.getElementById('save-btn');
     const label = document.getElementById('save-label');
-
-    const channelFields = [
-        ...collectList('auth_channels'),
-        ...collectList('global_search_channels'),
-        ...collectList('manual_channels'),
-    ];
-    const acEl = document.getElementById('announcement_channel');
-    const scEl = document.getElementById('skip_channel');
-    const acId = (acEl.dataset.id || extractChannelId(acEl.value.trim()));
-    const scId = (scEl.dataset.id || extractChannelId(scEl.value.trim()));
-    if (acId) channelFields.push(acId);
-    if (scId) channelFields.push(scId);
-    for (const c of channelFields) {
-        if (!isValidChannelId(c)) {
-            alert('Only channel IDs in -100xxxxxxxxxx format are accepted: ' + c);
-            return;
-        }
-    }
-    if (acEl.value.trim() && !acId) {
-        alert('Announcement channel must be -100xxxxxxxxxx format.');
-        return;
-    }
-    if (scEl.value.trim() && !scId) {
-        alert('Skip channel must be -100xxxxxxxxxx format.');
-        return;
-    }
-
-    btn.disabled  = true;
-    label.textContent = 'Saving…';
-
-    const payload = {
-        replace_mode:                  document.getElementById('replace_mode').checked,
-        duplicate_protection:          document.getElementById('duplicate_protection').checked,
-        hide_catalog:                  document.getElementById('hide_catalog').checked,
-        admin_username:                document.getElementById('admin_username').value.trim(),
-        admin_password:                document.getElementById('admin_password').value,  // blank = keep
-        session_secret:                document.getElementById('session_secret').value,  // blank = keep
-        tmdb_api:                      document.getElementById('tmdb_api').value.trim(),
-        tvdb_api:                      (document.getElementById('tvdb_api') || {}).value?.trim() || '',
-        base_url:                      document.getElementById('base_url').value.trim(),
-        better_poster_enabled:         document.getElementById('better_poster_enabled').checked,
-        better_poster:                 document.getElementById('better_poster').value.trim(),
-        rpdb_enabled:                  document.getElementById('rpdb_enabled').checked,
-        rpdb_api_key:                  document.getElementById('rpdb_api_key').value.trim(),
-        spatial_poster_enabled:        document.getElementById('spatial_poster_enabled').checked,
-        spatial_poster:                document.getElementById('spatial_poster').value.trim(),
-        stream_formatter:              document.getElementById('elemento_formatter').value,
-        formatter_name:                document.getElementById('formatter_name').value,
-        formatter_description:         document.getElementById('formatter_description').value,
-        fanart_enabled:                document.getElementById('fanart_enabled').checked,
-        fanart_api_key:                document.getElementById('fanart_api_key').value.trim(),
-        fanart_shuffle:                document.getElementById('fanart_shuffle').checked,
-        fanart_shuffle_interval:       parseInt(document.getElementById('fanart_shuffle_interval').value, 10) || 0,
-        fanart_low_res_poster:         document.getElementById('fanart_low_res_poster').checked,
-        upstream_repo:                 document.getElementById('upelemento_repo').value.trim(),
-        upstream_branch:               document.getElementById('upelemento_branch').value.trim(),
-        auth_channels:                 collectList('auth_channels'),
-        anime_channels:                collectAnimeChannels(),
-        subscription:                  document.getElementById('subscription').checked,
-        subscription_group_id:         parseInt(document.getElementById('subscription_group_id').value || '0', 10),
-        payment_instructions:          document.getElementById('payment_instructions').value.trim(),
-        payment_qr_url:                document.getElementById('payment_qr_url').value.trim(),
-        approver_ids:                  collectList('approver_ids').map(Number),
-        http_proxy_url:                document.getElementById('http_proxy_url').value.trim(),
-        show_proxy_and_non_proxy_both: document.getElementById('show_proxy_and_non_proxy_both').checked,
-        mediaflow_proxy:               document.getElementById('mediaflow_proxy').checked,
-        mediaflow_password:            document.getElementById('mediaflow_password').value,
-        cf_stream_url:                 document.getElementById('cf_elemento_url').value.trim(),
-        cf_stream_secret:              document.getElementById('cf_elemento_secret').value.trim(),
-        webdav_user:                   document.getElementById('webdav_user').value.trim(),
-        webdav_password:               document.getElementById('webdav_password').value,
-        multi_tokens:                  collectList('multi_tokens'),
-        extra_databases:               collectList('extra_databases'),
-        global_search:                 document.getElementById('global_search').checked,
-        global_search_channels:        collectList('global_search_channels'),
-        manual_channels:               collectList('manual_channels'),
-        announce_new_content:          document.getElementById('announce_new_content').checked,
-        announcement_channel:          (function(){const el=document.getElementById('announcement_channel');return el.dataset.id||extractChannelId(el.value.trim());})(),
-        skip_channel:                  (function(){const el=document.getElementById('skip_channel');return el.dataset.id||extractChannelId(el.value.trim());})(),
-        delete_on_metadata_fail:       document.getElementById('delete_on_metadata_fail').checked,
+    const setSaving = (saving) => {
+        if (btn) btn.disabled = saving;
+        if (label) label.textContent = saving ? 'Saving…' : 'Save Settings';
     };
-    const dsEl = document.getElementById('default_elementoing');
-    if (dsEl) payload.default_streaming = dsEl.checked ? 'userbot' : 'bots';
+
+    const val = (id, fallback = '') => {
+        const el = document.getElementById(id);
+        return el ? (el.value ?? fallback) : fallback;
+    };
+    const checked = (id) => {
+        const el = document.getElementById(id);
+        return !!(el && el.checked);
+    };
 
     try {
-        const res  = await fetch('/api/admin/settings', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-        });
-        const data = await res.json();
+        const channelFields = [
+            ...collectList('auth_channels'),
+            ...collectList('global_search_channels'),
+            ...collectList('manual_channels'),
+        ];
+        const acEl = document.getElementById('announcement_channel');
+        const scEl = document.getElementById('skip_channel');
+        const acId = acEl ? ((acEl.dataset && acEl.dataset.id) || extractChannelId((acEl.value || '').trim())) : '';
+        const scId = scEl ? ((scEl.dataset && scEl.dataset.id) || extractChannelId((scEl.value || '').trim())) : '';
+        if (acId) channelFields.push(acId);
+        if (scId) channelFields.push(scId);
+        for (const c of channelFields) {
+            if (c && !isValidChannelId(c)) {
+                showToast('Formato de canal inválido (usa -100xxxxxxxxxx): ' + c, 'error', 'Validación');
+                return;
+            }
+        }
+        if (acEl && acEl.value.trim() && !acId) {
+            showToast('El canal de anuncios debe tener formato -100xxxxxxxxxx.', 'error', 'Validación');
+            return;
+        }
+        if (scEl && scEl.value.trim() && !scId) {
+            showToast('El canal de metadatos omitidos debe tener formato -100xxxxxxxxxx.', 'error', 'Validación');
+            return;
+        }
+
+        const payload = {
+            replace_mode:                  checked('replace_mode'),
+            duplicate_protection:          checked('duplicate_protection'),
+            hide_catalog:                  checked('hide_catalog'),
+            admin_username:                val('admin_username').trim(),
+            admin_password:                val('admin_password'),  // blank = keep
+            session_secret:                val('session_secret'),  // blank = keep
+            tmdb_api:                      val('tmdb_api').trim(),
+            tvdb_api:                      val('tvdb_api').trim(),
+            base_url:                      val('base_url').trim(),
+            better_poster_enabled:         checked('better_poster_enabled'),
+            better_poster:                 val('better_poster').trim(),
+            rpdb_enabled:                  checked('rpdb_enabled'),
+            rpdb_api_key:                  val('rpdb_api_key').trim(),
+            spatial_poster_enabled:        checked('spatial_poster_enabled'),
+            spatial_poster:                val('spatial_poster').trim(),
+            stream_formatter:              val('elemento_formatter') || 'default',
+            formatter_name:                val('formatter_name'),
+            formatter_description:         val('formatter_description'),
+            fanart_enabled:                checked('fanart_enabled'),
+            fanart_api_key:                val('fanart_api_key').trim(),
+            fanart_shuffle:                checked('fanart_shuffle'),
+            fanart_shuffle_interval:       parseInt(val('fanart_shuffle_interval', '0'), 10) || 0,
+            fanart_low_res_poster:         checked('fanart_low_res_poster'),
+            upstream_repo:                 val('upelemento_repo').trim(),
+            upstream_branch:               val('upelemento_branch').trim(),
+            auth_channels:                 collectList('auth_channels'),
+            anime_channels:                collectAnimeChannels(),
+            subscription:                  checked('subscription'),
+            subscription_group_id:         parseInt(val('subscription_group_id', '0'), 10) || 0,
+            payment_instructions:          val('payment_instructions').trim(),
+            payment_qr_url:                val('payment_qr_url').trim(),
+            approver_ids:                  collectList('approver_ids').map(Number).filter(n => !isNaN(n)),
+            http_proxy_url:                val('http_proxy_url').trim(),
+            show_proxy_and_non_proxy_both: checked('show_proxy_and_non_proxy_both'),
+            mediaflow_proxy:               checked('mediaflow_proxy'),
+            mediaflow_password:            val('mediaflow_password'),
+            cf_stream_url:                 val('cf_elemento_url').trim(),
+            cf_stream_secret:              val('cf_elemento_secret').trim(),
+            webdav_user:                   val('webdav_user').trim(),
+            webdav_password:               val('webdav_password'),
+            multi_tokens:                  collectList('multi_tokens'),
+            extra_databases:               collectList('extra_databases'),
+            global_search:                 checked('global_search'),
+            global_search_channels:        collectList('global_search_channels'),
+            manual_channels:               collectList('manual_channels'),
+            announce_new_content:          checked('announce_new_content'),
+            announcement_channel:          acId,
+            skip_channel:                  scId,
+            delete_on_metadata_fail:       checked('delete_on_metadata_fail'),
+        };
+        const dsEl = document.getElementById('default_elementoing');
+        if (dsEl) payload.default_streaming = dsEl.checked ? 'userbot' : 'bots';
+
+        setSaving(true);
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 30000);
+        let res, data;
+        try {
+            res = await fetch('/api/admin/settings', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+                signal: controller.signal,
+            });
+            try { data = await res.json(); } catch { data = {}; }
+        } finally {
+            clearTimeout(timeout);
+        }
 
         if (res.ok) {
-            showToast('Settings saved successfully!', 'success', 'Saved');
-
-            // Show reinit notices
-            const reinit = data.reinit || {};
+            showToast((data && data.message) || 'Ajustes guardados correctamente.', 'success', 'Guardado');
+            const reinit = (data && data.reinit) || {};
             for (const [subsystem, msg] of Object.entries(reinit)) {
                 showToast(`${capitalize(subsystem)}: ${msg}`, 'info');
             }
-
-            // Pull the freshly-saved state back from the server and patch
-            // the UI in place — no full page reload needed. This also
-            // picks up server-computed bits the form can't know on its
-            // own (e.g. each database's live connection-status dot).
-            await refreshSettingsFromServer();
+            try { await refreshSettingsFromServer(); } catch (e) { console.error('refresh after save failed', e); }
         } else {
-            showToast(data.detail || 'Save failed', 'error', 'Error');
+            const detail = (data && (data.detail || data.message)) || `Error ${res.status}`;
+            showToast(detail, 'error', 'No se pudo guardar');
+            console.error('Save settings failed', res.status, data);
         }
     } catch (err) {
-        showToast('Network error — could not reach server.', 'error', 'Error');
+        if (err && err.name === 'AbortError') {
+            showToast('La solicitud tardó demasiado. Verifica tu conexión e inténtalo de nuevo.', 'error', 'Tiempo agotado');
+        } else {
+            showToast('No se pudo guardar: ' + (err && err.message ? err.message : 'error de red o del navegador'), 'error', 'Error');
+        }
         console.error(err);
     } finally {
-        btn.disabled  = false;
-        label.textContent = 'Save Settings';
+        setSaving(false);
     }
 }
 
@@ -1771,65 +1789,66 @@ async function refreshSettingsFromServer() {
 }
 
 function renderSettings(s) {
+    const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v == null ? '' : v; };
+    const setChk = (id, v) => { const el = document.getElementById(id); if (el) el.checked = !!v; };
+    try {
     // Toggles
-    document.getElementById('replace_mode').checked = !!s.replace_mode;
-    document.getElementById('duplicate_protection').checked = !!s.duplicate_protection;
-    toggleDuplicateProtection();
-    document.getElementById('hide_catalog').checked = !!s.hide_catalog;
-    document.getElementById('subscription').checked = !!s.subscription;
-    document.getElementById('show_proxy_and_non_proxy_both').checked = !!s.show_proxy_and_non_proxy_both;
-    document.getElementById('global_search').checked = !!s.global_search;
+    setChk('replace_mode', s.replace_mode);
+    setChk('duplicate_protection', s.duplicate_protection);
+    try { toggleDuplicateProtection(); } catch(e){}
+    setChk('hide_catalog', s.hide_catalog);
+    setChk('subscription', s.subscription);
+    setChk('show_proxy_and_non_proxy_both', s.show_proxy_and_non_proxy_both);
+    setChk('global_search', s.global_search);
     const dsEl = document.getElementById('default_elementoing');
     if (dsEl) dsEl.checked = (s.default_streaming || s.default_elementoing) === 'userbot';
-    document.getElementById('announce_new_content').checked = !!s.announce_new_content;
-    document.getElementById('delete_on_metadata_fail').checked = !!s.delete_on_metadata_fail;
-    toggleSubFields();
-    toggleGlobalSearchFields();
-    toggleAnnouncementFields();
+    setChk('announce_new_content', s.announce_new_content);
+    setChk('delete_on_metadata_fail', s.delete_on_metadata_fail);
+    try { toggleSubFields(); } catch(e){}
+    try { toggleGlobalSearchFields(); } catch(e){}
+    try { toggleAnnouncementFields(); } catch(e){}
 
     // Plain text/number fields
-    document.getElementById('admin_username').value = s.admin_username || '';
-    document.getElementById('admin_password').value = '';  // never re-fill password
-    document.getElementById('tmdb_api').value = s.tmdb_api || '';
-    if (document.getElementById('tvdb_api')) document.getElementById('tvdb_api').value = s.tvdb_api || '';
-    document.getElementById('base_url').value = s.base_url || '';
-    document.getElementById('better_poster_enabled').checked = !!s.better_poster_enabled;
-    document.getElementById('better_poster').value = s.better_poster || '';
-    document.getElementById('rpdb_enabled').checked = !!s.rpdb_enabled;
-    document.getElementById('rpdb_api_key').value = s.rpdb_api_key || '';
-    document.getElementById('spatial_poster_enabled').checked = !!s.spatial_poster_enabled;
-    document.getElementById('spatial_poster').value = s.spatial_poster || '';
-    document.getElementById('elemento_formatter').value = s.stream_formatter || s.elemento_formatter || 'default';
-    document.getElementById('formatter_name').value = s.formatter_name || '';
-    document.getElementById('formatter_description').value = s.formatter_description || '';
-    toggleFormatter();
-    document.getElementById('fanart_enabled').checked = !!s.fanart_enabled;
-    document.getElementById('fanart_api_key').value = s.fanart_api_key || '';
-    document.getElementById('fanart_shuffle').checked = !!s.fanart_shuffle;
-    document.getElementById('fanart_shuffle_interval').value = (s.fanart_shuffle_interval ?? 5);
-    document.getElementById('fanart_low_res_poster').checked = (s.fanart_low_res_poster ?? true);
-    togglePosterProvider();
-    toggleFanartShuffle();
-    document.getElementById('upelemento_repo').value = s.upstream_repo || s.upelemento_repo || '';
-    document.getElementById('upelemento_branch').value = s.upstream_branch || s.upelemento_branch || '';
-    document.getElementById('subscription_group_id').value = s.subscription_group_id || 0;
-    document.getElementById('http_proxy_url').value = s.http_proxy_url || '';
-    document.getElementById('mediaflow_proxy').checked = !!s.mediaflow_proxy;
-    document.getElementById('mediaflow_password').value = s.mediaflow_password || '';
-    document.getElementById('cf_elemento_url').value = s.cf_stream_url || s.cf_elemento_url || '';
-    document.getElementById('cf_elemento_secret').value = s.cf_stream_secret || s.cf_elemento_secret || '';
-    const wu = document.getElementById('webdav_user');
-    if (wu) wu.value = s.webdav_user || '';
-    const wp = document.getElementById('webdav_password');
-    if (wp) wp.value = s.webdav_password || '';
-    toggleMediaflowFields();
+    setVal('admin_username', s.admin_username || '');
+    setVal('admin_password', '');  // never re-fill password
+    setVal('tmdb_api', s.tmdb_api || '');
+    setVal('tvdb_api', s.tvdb_api || '');
+    setVal('base_url', s.base_url || '');
+    setChk('better_poster_enabled', s.better_poster_enabled);
+    setVal('better_poster', s.better_poster || '');
+    setChk('rpdb_enabled', s.rpdb_enabled);
+    setVal('rpdb_api_key', s.rpdb_api_key || '');
+    setChk('spatial_poster_enabled', s.spatial_poster_enabled);
+    setVal('spatial_poster', s.spatial_poster || '');
+    setVal('elemento_formatter', s.stream_formatter || s.elemento_formatter || 'default');
+    setVal('formatter_name', s.formatter_name || '');
+    setVal('formatter_description', s.formatter_description || '');
+    try { toggleFormatter(); } catch(e){}
+    setChk('fanart_enabled', s.fanart_enabled);
+    setVal('fanart_api_key', s.fanart_api_key || '');
+    setChk('fanart_shuffle', s.fanart_shuffle);
+    setVal('fanart_shuffle_interval', (s.fanart_shuffle_interval ?? 5));
+    setChk('fanart_low_res_poster', (s.fanart_low_res_poster ?? true));
+    try { togglePosterProvider(); } catch(e){}
+    try { toggleFanartShuffle(); } catch(e){}
+    setVal('upelemento_repo', s.upstream_repo || s.upelemento_repo || '');
+    setVal('upelemento_branch', s.upstream_branch || s.upelemento_branch || '');
+    setVal('subscription_group_id', s.subscription_group_id || 0);
+    setVal('http_proxy_url', s.http_proxy_url || '');
+    setChk('mediaflow_proxy', s.mediaflow_proxy);
+    setVal('mediaflow_password', s.mediaflow_password || '');
+    setVal('cf_elemento_url', s.cf_stream_url || s.cf_elemento_url || '');
+    setVal('cf_elemento_secret', s.cf_stream_secret || s.cf_elemento_secret || '');
+    setVal('webdav_user', s.webdav_user || '');
+    setVal('webdav_password', s.webdav_password || '');
+    try { toggleMediaflowFields(); } catch(e){}
 
     const titles = s.channel_titles || {};
-    rebuildAuthChannels(s.auth_channels, s.anime_channels, titles);
-    rebuildSimpleList('approver_ids_items', s.approver_ids, 'number');
-    rebuildSimpleList('multi_tokens_items', s.multi_tokens, 'text');
-    rebuildSimpleList('global_search_channels_items', s.global_search_channels, 'text', titles);
-    rebuildSimpleList('manual_channels_items', s.manual_channels, 'text', titles);
+    try { rebuildAuthChannels(s.auth_channels, s.anime_channels, titles); } catch(e){}
+    try { rebuildSimpleList('approver_ids_items', s.approver_ids, 'number'); } catch(e){}
+    try { rebuildSimpleList('multi_tokens_items', s.multi_tokens, 'text'); } catch(e){}
+    try { rebuildSimpleList('global_search_channels_items', s.global_search_channels, 'text', titles); } catch(e){}
+    try { rebuildSimpleList('manual_channels_items', s.manual_channels, 'text', titles); } catch(e){}
 
     const ac = document.getElementById('announcement_channel');
     if (ac) {
@@ -1849,9 +1868,10 @@ function renderSettings(s) {
         const scBtn = document.getElementById('skip_channel_clear');
         if (scBtn) scBtn.style.display = scid ? '' : 'none';
     }
-    toggleSkipDeleteField();
+    try { toggleSkipDeleteField(); } catch(e){}
 
-    rebuildDatabaseList(s.database_list || []);
+    try { rebuildDatabaseList(s.database_list || []); } catch(e){}
+    } catch(e) { console.error('renderSettings error', e); }
 }
 
 function rebuildSimpleList(containerId, values, inputType, titles) {
