@@ -927,8 +927,8 @@ if(navContainer) {
             });
         } else {
             banner.classList.add('hidden');
-            navbar.style.top = '';
-            document.body.style.paddingTop = '';
+            navbar.style.top = 'max(calc(env(safe-area-inset-top, 0px) + 1.25rem), calc(env(safe-area-inset-top, 0px) + 20px))';
+            document.body.style.paddingTop = 'calc(8.25rem + env(safe-area-inset-top, 0px))';
             if (mainEl) mainEl.style.marginTop = '';
         }
     }

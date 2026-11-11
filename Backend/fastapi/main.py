@@ -334,7 +334,7 @@ async def apple_touch_icon(request: Request):
 @app.get("/sw.js")
 async def service_worker():
     js = r"""
-const CACHE = 'mibiblioteca-v1';
+const CACHE = 'mibiblioteca-v2';
 const APP_SHELL = ['/', '/login', '/manifest.webmanifest'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(APP_SHELL).catch(()=>{})));
