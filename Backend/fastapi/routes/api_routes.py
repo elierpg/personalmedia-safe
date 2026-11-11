@@ -347,6 +347,9 @@ async def create_token_api(payload: dict):
             _parse_limit(payload.get("monthly_limit_gb")),
             subscription_exempt=bool(payload.get("subscription_exempt")),
         )
+        token_str = new_token.get("token")
+        if token_str and "addon_url" not in new_token:
+            new_token["addon_url"] = f"{SettingsManager.current().base_url}/v1/{token_str}/manifest.json"
         return new_token
     except HTTPException:
         raise
