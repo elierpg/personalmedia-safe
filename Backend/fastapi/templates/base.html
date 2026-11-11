@@ -2,17 +2,22 @@
 <html lang="en" class="{{ 'dark' if theme.is_dark else 'light' }} style-{{ theme.style|default('default') }}">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
-<title>{% block title %}Mi Media Server{% endblock %}</title>
+<meta name="format-detection" content="telephone=no">
+<title>{% block title %}Mi Biblioteca{% endblock %}</title>
 
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='{{ theme.colors.primary | replace('#','%23') }}'/%3E%3Cpath d='M12.5 9.5l10 6.5-10 6.5z' fill='white'/%3E%3C/svg%3E">
-<link rel="apple-touch-icon" href="/pwa-icon.svg">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.webmanifest">
-<meta name="theme-color" content="{{ theme.colors.primary }}">
+<meta name="theme-color" content="{{ theme.colors.primary }}" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="{{ theme.colors.primary }}" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="{{ 'black-translucent' if theme.is_dark else 'default' }}">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Mi Biblioteca">
 <meta name="mobile-web-app-capable" content="yes">
+<meta name="application-name" content="Mi Biblioteca">
 
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"/>
@@ -57,13 +62,17 @@ html { scroll-behavior: smooth; }
 }
 
 body {
-    font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-tap-highlight-color: transparent;
     background-color: var(--bg);
     color: var(--text);
     min-height: 100vh;
+    min-height: 100dvh;
     display: flex;
     flex-direction: column;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 body::before {
@@ -120,6 +129,31 @@ body::before {
     transition: background .2s ease, border-color .2s ease;
 }
 .btn-ghost:hover { background: var(--surface-2); border-color: var(--hairline-strong); }
+
+
+/* HIG-inspired touch targets & form rhythm */
+:root {
+    --tap-target: 44px;
+    --control-radius: 14px;
+    --page-gap: 1.25rem;
+}
+button, [role="button"], .btn-primary, .btn-ghost, input[type="submit"], input[type="button"] {
+    min-height: var(--tap-target);
+}
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+select, textarea, .field {
+    min-height: var(--tap-target);
+    font-size: 16px; /* avoid iOS focus zoom */
+}
+textarea { min-height: 96px; }
+input[type="checkbox"], input[type="radio"] {
+    width: 20px; height: 20px;
+}
+.surface-card, .glass-panel { border-radius: 1.25rem; }
+@media (max-width: 640px) {
+    .surface-card, .glass-panel { border-radius: 1.1rem; }
+}
+
 
 .badge {
     display: inline-flex;
@@ -278,12 +312,16 @@ html.style-neo_brutal .field:focus {
 .nav-link {
     color: var(--text-sec);
     border-radius: 9999px;
-    padding: 0.5rem clamp(0.55rem, 0.9vw, 1.25rem);
-    transition: color 0.3s ease;
+    padding: 0.625rem clamp(0.7rem, 1vw, 1.25rem);
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    transition: color 0.3s ease, background-color 0.2s ease;
     position: relative;
     z-index: 1;
     white-space: nowrap;
     font-weight: 600;
+    font-size: 0.9375rem;
 }
 
 .nav-link.pill-active {
@@ -488,7 +526,7 @@ if (!navigator.clipboard) Object.defineProperty(navigator, 'clipboard', { value:
 </script>
 </head>
 
-<body class="pt-24 pb-12 antialiased">
+<body class="antialiased" style="padding-top: calc(6.5rem + env(safe-area-inset-top, 0px)); padding-bottom: calc(2rem + env(safe-area-inset-bottom, 0px));">
 <div style="background:#7f1d1d;color:#fff;text-align:center;padding:6px 10px;font-size:12px;font-weight:600;">USO PRIVADO Y PERSONAL — Acceso no autorizado prohibido. Solo contenido propio/con permisos.</div>
 
 <div id="update-banner" class="hidden fixed top-0 left-0 right-0 z-[60] px-3 pt-3 pointer-events-none">
@@ -506,10 +544,11 @@ if (!navigator.clipboard) Object.defineProperty(navigator, 'clipboard', { value:
 <div id="overlay" class="fixed inset-0 z-40 opacity-0 pointer-events-none"></div>
 
 <nav id="navbar"
-  class="fixed top-6 left-1/2 -translate-x-1/2 w-[95%] max-w-6xl z-50
-  glass-panel glass-nav glass-pill px-5 py-3
-  grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4
-  transition-all duration-300">
+  class="fixed left-1/2 -translate-x-1/2 w-[95%] max-w-6xl z-50
+  glass-panel glass-nav glass-pill px-4 sm:px-5 py-2.5
+  grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 sm:gap-4
+  transition-all duration-300"
+  style="top: calc(0.75rem + env(safe-area-inset-top, 0px));">
     <a href="/" class="flex items-center gap-3 shrink-0">
         <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center shadow-[0_0_15px_var(--primary)]">
             <i class="fa-solid fa-play text-white text-xs"></i>
@@ -536,12 +575,12 @@ if (!navigator.clipboard) Object.defineProperty(navigator, 'clipboard', { value:
 
     <div class="flex items-center gap-3 justify-self-end">
         {% if current_user %}
-            <button id="menu-btn" class="md:hidden w-10 h-10 flex items-center justify-center text-xl hover:bg-surface-2 rounded-full transition">
+            <button id="menu-btn" class="md:hidden w-11 h-11 flex items-center justify-center text-xl hover:bg-surface-2 rounded-full transition" aria-label="Abrir menú">
                 <i id="menu-icon" class="fa-solid fa-bars"></i>
             </button>
 
             <div class="relative">
-                <button id="user-btn" class="w-10 h-10 rounded-full bg-primary/20 hover:bg-primary/30 flex items-center justify-center text-primary text-lg transition border border-primary/30">
+                <button id="user-btn" class="w-11 h-11 rounded-full bg-primary/20 hover:bg-primary/30 flex items-center justify-center text-primary text-lg transition border border-primary/30" aria-label="Perfil y apariencia">
                     <i class="fa-solid fa-user"></i>
                 </button>
 
@@ -608,21 +647,21 @@ if (!navigator.clipboard) Object.defineProperty(navigator, 'clipboard', { value:
     </div>
 
     <div id="mobile-menu" class="absolute top-[calc(100%+12px)] left-0 w-full overflow-hidden max-h-0 opacity-0 transition-all duration-300 ease-in-out md:hidden z-40">
-        <div class="glass-panel mx-2 rounded-3xl p-4 flex flex-col gap-2">
-            <a href="/" class="px-4 py-3 rounded-xl hover:bg-primary hover:text-background transition flex items-center gap-3 font-semibold"><i class="fa-solid fa-house"></i> Home</a>
-            <a href="/media/manage" class="px-4 py-3 rounded-xl hover:bg-primary hover:text-background transition flex items-center gap-3 font-semibold"><i class="fa-solid fa-clapperboard"></i> Media</a>
-            <a href="/catalogs" class="px-4 py-3 rounded-xl hover:bg-primary hover:text-background transition flex items-center gap-3 font-semibold"><i class="fa-solid fa-layer-group"></i> Catalogs</a>
-            <a href="/admin/dashboard" class="px-4 py-3 rounded-xl hover:bg-primary hover:text-background transition flex items-center gap-3 font-semibold"><i class="fa-solid fa-chart-line"></i> Admin</a>
-            <a href="/admin/subscriptions" class="px-4 py-3 rounded-xl hover:bg-primary hover:text-background transition flex items-center gap-3 font-semibold"><i class="fa-solid fa-credit-card"></i> Plans</a>
-            <a href="/admin/access" class="px-4 py-3 rounded-xl hover:bg-primary hover:text-background transition flex items-center gap-3 font-semibold"><i class="fa-solid fa-shield"></i> Tokens</a>
-            <a href="/admin/requests" class="px-4 py-3 rounded-xl hover:bg-primary hover:text-background transition flex items-center gap-3 font-semibold"><i class="fa-solid fa-inbox"></i> Requests</a>
-            <a href="/admin/tools" class="px-4 py-3 rounded-xl hover:bg-primary hover:text-background transition flex items-center gap-3 font-semibold"><i class="fa-solid fa-screwdriver-wrench"></i> Tools</a>
-            <a href="/admin/settings" class="px-4 py-3 rounded-xl hover:bg-primary hover:text-background transition flex items-center gap-3 font-semibold"><i class="fa-solid fa-gear"></i> Settings</a>
+        <div class="glass-panel mx-2 rounded-3xl p-3 sm:p-4 flex flex-col gap-1.5" style="padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));">
+            <a href="/" class="px-4 py-3.5 min-h-[44px] rounded-2xl hover:bg-primary hover:text-background transition flex items-center gap-3 font-semibold text-[15px]"><i class="fa-solid fa-house"></i> Home</a>
+            <a href="/media/manage" class="px-4 py-3.5 min-h-[44px] rounded-2xl hover:bg-primary hover:text-background transition flex items-center gap-3 font-semibold text-[15px]"><i class="fa-solid fa-clapperboard"></i> Media</a>
+            <a href="/catalogs" class="px-4 py-3.5 min-h-[44px] rounded-2xl hover:bg-primary hover:text-background transition flex items-center gap-3 font-semibold text-[15px]"><i class="fa-solid fa-layer-group"></i> Catalogs</a>
+            <a href="/admin/dashboard" class="px-4 py-3.5 min-h-[44px] rounded-2xl hover:bg-primary hover:text-background transition flex items-center gap-3 font-semibold text-[15px]"><i class="fa-solid fa-chart-line"></i> Admin</a>
+            <a href="/admin/subscriptions" class="px-4 py-3.5 min-h-[44px] rounded-2xl hover:bg-primary hover:text-background transition flex items-center gap-3 font-semibold text-[15px]"><i class="fa-solid fa-credit-card"></i> Plans</a>
+            <a href="/admin/access" class="px-4 py-3.5 min-h-[44px] rounded-2xl hover:bg-primary hover:text-background transition flex items-center gap-3 font-semibold text-[15px]"><i class="fa-solid fa-shield"></i> Tokens</a>
+            <a href="/admin/requests" class="px-4 py-3.5 min-h-[44px] rounded-2xl hover:bg-primary hover:text-background transition flex items-center gap-3 font-semibold text-[15px]"><i class="fa-solid fa-inbox"></i> Requests</a>
+            <a href="/admin/tools" class="px-4 py-3.5 min-h-[44px] rounded-2xl hover:bg-primary hover:text-background transition flex items-center gap-3 font-semibold text-[15px]"><i class="fa-solid fa-screwdriver-wrench"></i> Tools</a>
+            <a href="/admin/settings" class="px-4 py-3.5 min-h-[44px] rounded-2xl hover:bg-primary hover:text-background transition flex items-center gap-3 font-semibold text-[15px]"><i class="fa-solid fa-gear"></i> Settings</a>
         </div>
     </div>
 </nav>
 
-<main class="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8">
+<main class="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4 sm:mt-6">
     {% block content %}{% endblock %}
 </main>
 
@@ -838,19 +877,22 @@ if(navContainer) {
 (function versionBanner() {
     const banner = document.getElementById('update-banner');
     const navbar = document.getElementById('navbar');
+    const mainEl = document.querySelector('main');
     function layout(show) {
         if (!banner || !navbar) return;
         if (show) {
             banner.classList.remove('hidden');
             requestAnimationFrame(() => {
                 const h = banner.offsetHeight || 72;
-                navbar.style.top = (h + 12) + 'px';
-                document.body.style.paddingTop = (h + 88) + 'px';
+                navbar.style.top = `calc(${h + 12}px + env(safe-area-inset-top, 0px))`;
+                document.body.style.paddingTop = `calc(${h + 88}px + env(safe-area-inset-top, 0px))`;
+                if (mainEl) mainEl.style.marginTop = '0';
             });
         } else {
             banner.classList.add('hidden');
             navbar.style.top = '';
             document.body.style.paddingTop = '';
+            if (mainEl) mainEl.style.marginTop = '';
         }
     }
     async function check() {

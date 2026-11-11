@@ -3,11 +3,11 @@
 {% block title %}Login - Mi Media Server{% endblock %}
 
 {% block content %}
-<div class="flex-1 flex items-center justify-center py-4 min-h-0">
+<div class="flex-1 flex items-center justify-center py-6 sm:py-8 min-h-0 login-safe">
 
     <div class="w-full max-w-md rounded-[2rem] overflow-hidden glass-panel self-center">
 
-        <div class="p-6 sm:p-10 flex flex-col justify-center bg-card/20">
+        <div class="p-7 sm:p-10 flex flex-col justify-center bg-card/20">
 
             <div class="flex items-center gap-3 justify-center mb-6">
                 <div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center shadow-[0_0_15px_var(--primary)]">
@@ -18,9 +18,9 @@
                 </span>
             </div>
 
-            <div class="text-center mb-6">
-                <h2 class="text-lg font-bold tracking-tight text-text">Admin Authentication</h2>
-                <p class="text-text-secondary text-xs mt-1">Access your management console</p>
+            <div class="text-center mb-7">
+                <h2 class="text-[1.35rem] sm:text-2xl font-bold tracking-tight text-text">Admin Authentication</h2>
+                <p class="text-text-secondary text-[15px] mt-1.5">Access your management console</p>
             </div>
 
             {% if error %}
@@ -33,34 +33,34 @@
             <form method="post" class="space-y-4">
 
                 <div class="space-y-1.5">
-                    <label class="text-[10px] font-bold uppercase tracking-widest text-text-secondary ml-1">Username</label>
+                    <label class="text-[11px] font-bold uppercase tracking-widest text-text-secondary ml-1">Username</label>
                     <div class="relative group">
                         <i class="fa-solid fa-user absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary group-focus-within:text-primary transition-colors text-sm"></i>
                         <input type="text" name="username" required
-                            class="w-full pl-11 pr-4 py-3 bg-background/50 rounded-2xl border border-hairline focus:border-primary/50 focus:ring-4 focus:ring-primary/10 outline-none transition-all text-text text-sm"
+                            class="w-full min-h-[48px] pl-11 pr-4 py-3.5 bg-background/50 rounded-2xl border border-hairline focus:border-primary/50 focus:ring-4 focus:ring-primary/10 outline-none transition-all text-text text-[16px]"
                             placeholder="Admin ID">
                     </div>
                 </div>
 
                 <div class="space-y-1.5">
-                    <label class="text-[10px] font-bold uppercase tracking-widest text-text-secondary ml-1">Password</label>
+                    <label class="text-[11px] font-bold uppercase tracking-widest text-text-secondary ml-1">Password</label>
                     <div class="relative group">
                         <i class="fa-solid fa-lock absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary group-focus-within:text-primary transition-colors text-sm"></i>
                         
                         <input type="password" id="password" name="password" required
-                            class="w-full pl-11 pr-11 py-3 bg-background/50 rounded-2xl border border-hairline focus:border-primary/50 focus:ring-4 focus:ring-primary/10 outline-none transition-all text-text text-sm"
+                            class="w-full min-h-[48px] pl-11 pr-12 py-3.5 bg-background/50 rounded-2xl border border-hairline focus:border-primary/50 focus:ring-4 focus:ring-primary/10 outline-none transition-all text-text text-[16px]"
                             placeholder="••••••••">
 
-                        <button type="button" onclick="togglePassword()" 
-                            class="absolute right-4 top-1/2 -translate-y-1/2 text-text-secondary hover:text-primary transition-colors">
-                            <i id="eyeIcon" class="fa-solid fa-eye text-xs"></i>
+                        <button type="button" onclick="togglePassword()" aria-label="Mostrar contraseña"
+                            class="absolute right-1.5 top-1/2 -translate-y-1/2 w-11 h-11 inline-flex items-center justify-center rounded-xl text-text-secondary hover:text-primary transition-colors">
+                            <i id="eyeIcon" class="fa-solid fa-eye text-sm"></i>
                         </button>
                     </div>
                 </div>
 
                 <button type="submit"
-                    class="w-full py-3.5 rounded-2xl bg-primary hover:brightness-110 text-background font-bold transition-all shadow-lg shadow-primary/20 flex items-center justify-center gap-3 mt-4">
-                    <i class="fa-solid fa-right-to-bracket text-sm"></i>
+                    class="w-full min-h-[50px] py-3.5 rounded-2xl bg-primary hover:brightness-110 text-background font-bold text-[17px] transition-all shadow-lg shadow-primary/20 flex items-center justify-center gap-3 mt-5">
+                    <i class="fa-solid fa-right-to-bracket"></i>
                     Sign In
                 </button>
 
@@ -71,21 +71,26 @@
 </div>
 
 <style>
-    /* Strictly disable scrolling on the login screen */
-    html, body { 
-        height: 100%; 
-        overflow: hidden !important; 
+    /* Keep login focused but safe-area/keyboard friendly on iPhone */
+    html, body {
+        min-height: 100%;
+        min-height: 100dvh;
     }
-    
-    /* Ensure the 'main' block from base.html takes full height */
+    body {
+        overflow-x: hidden;
+    }
     main {
         display: flex;
         flex-direction: column;
-        height: 100%;
+        min-height: calc(100dvh - 7.5rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
     }
-
     input::placeholder {
-        color: color-mix(in srgb, var(--text-sec) 40%, transparent);
+        color: color-mix(in srgb, var(--text-sec) 45%, transparent);
+    }
+    @supports (padding: max(0px)) {
+        .login-safe {
+            padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+        }
     }
 </style>
 

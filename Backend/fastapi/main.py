@@ -200,6 +200,57 @@ async def logout_route(request: Request):
 async def set_theme_route(request: Request, theme: str = Form(None), style: str = Form(None)):
     return await set_theme(request, theme, style)
 
+def _hex_to_rgb(h: str):
+    h = (h or "#2563eb").lstrip("#")
+    if len(h) == 3:
+        h = "".join(c * 2 for c in h)
+    try:
+        return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+    except Exception:
+        return (37, 99, 235)
+
+def _make_app_icon_png(size: int = 180, primary: str = "#2563eb") -> bytes:
+    import struct, zlib
+    pr, pg, pb = _hex_to_rgb(primary)
+    w = h = size
+    # simple play triangle
+    cx, cy = w * 0.54, h * 0.5
+    tri_w, tri_h = w * 0.28, h * 0.34
+    x0, y0 = cx - tri_w * 0.45, cy - tri_h / 2
+    x1, y1 = cx - tri_w * 0.45, cy + tri_h / 2
+    x2, y2 = cx + tri_w * 0.55, cy
+    def inside_tri(px, py):
+        # barycentric
+        denom = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2)
+        if abs(denom) < 1e-6:
+            return False
+        a = ((y1 - y2) * (px - x2) + (x2 - x1) * (py - y2)) / denom
+        b = ((y2 - y0) * (px - x2) + (x0 - x2) * (py - y2)) / denom
+        c = 1 - a - b
+        return a >= -0.01 and b >= -0.01 and c >= -0.01
+    raw = bytearray()
+    radius = w * 0.22
+    for y in range(h):
+        raw.append(0)  # filter
+        for x in range(w):
+            # rounded rect mask
+            dx = max(abs(x - w/2) - (w/2 - radius), 0)
+            dy = max(abs(y - h/2) - (h/2 - radius), 0)
+            if dx*dx + dy*dy > radius*radius:
+                raw.extend((0, 0, 0, 0))
+            elif inside_tri(x + 0.5, y + 0.5):
+                raw.extend((255, 255, 255, 255))
+            else:
+                raw.extend((pr, pg, pb, 255))
+    def chunk(tag, data):
+        c = tag + data
+        return struct.pack(">I", len(data)) + c + struct.pack(">I", zlib.crc32(c) & 0xffffffff)
+    png = b"\x89PNG\r\n\x1a\n"
+    png += chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 6, 0, 0, 0))
+    png += chunk(b"IDAT", zlib.compress(bytes(raw), 9))
+    png += chunk(b"IEND", b"")
+    return png
+
 @app.get("/manifest.webmanifest")
 async def pwa_manifest(request: Request):
     theme_name = request.session.get("theme", DEFAULT_THEME)
@@ -207,15 +258,19 @@ async def pwa_manifest(request: Request):
     theme = get_theme(theme_name, style_name)
     return JSONResponse(
         {
-            "name": "Mi Media Server",
+            "id": "/",
+            "name": "Mi Biblioteca",
             "short_name": "Mi Biblioteca",
             "description": "Gestión multimedia personal",
             "start_url": "/",
             "scope": "/",
             "display": "standalone",
-            "orientation": "any",
+            "display_override": ["standalone", "minimal-ui"],
+            "orientation": "portrait-primary",
             "background_color": theme["colors"]["background"],
             "theme_color": theme["colors"]["primary"],
+            "lang": "es",
+            "categories": ["entertainment", "utilities"],
             "icons": [
                 {
                     "src": "/pwa-icon.svg",
@@ -225,9 +280,15 @@ async def pwa_manifest(request: Request):
                 },
                 {
                     "src": "/pwa-icon.svg",
-                    "sizes": "any",
+                    "sizes": "512x512",
                     "type": "image/svg+xml",
                     "purpose": "maskable"
+                },
+                {
+                    "src": "/apple-touch-icon.png",
+                    "sizes": "180x180",
+                    "type": "image/png",
+                    "purpose": "any"
                 }
             ]
         },
@@ -243,8 +304,8 @@ async def pwa_icon(request: Request):
     primary = theme["colors"]["primary"]
     svg = (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">'
-        f'<rect width="512" height="512" rx="96" fill="{primary}"/>'
-        f'<path d="M200 152l176 104-176 104z" fill="white"/>'
+        f'<rect width="512" height="512" rx="112" fill="{primary}"/>'
+        f'<path d="M210 160l168 96-168 96z" fill="white"/>'
         f'</svg>'
     )
     return Response(
@@ -253,15 +314,62 @@ async def pwa_icon(request: Request):
         headers={"Cache-Control": "no-cache"}
     )
 
+@app.get("/apple-touch-icon.png")
+async def apple_touch_icon(request: Request):
+    theme_name = request.session.get("theme", DEFAULT_THEME)
+    style_name = request.session.get("style", DEFAULT_STYLE)
+    theme = get_theme(theme_name, style_name)
+    primary = theme["colors"]["primary"]
+    try:
+        png = _make_app_icon_png(180, primary)
+    except Exception:
+        # fallback tiny transparent-ish png generation attempt
+        png = _make_app_icon_png(180, "#2563eb")
+    return Response(
+        content=png,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=3600"}
+    )
+
 @app.get("/sw.js")
 async def service_worker():
-    js = (
-        "self.addEventListener('install',e=>self.skipWaiting());"
-        "self.addEventListener('activate',e=>e.waitUntil(clients.claim()));"
-        "self.addEventListener('fetch',e=>e.respondWith(fetch(e.request).catch(()=>caches.match(e.request))));"
-    )
+    js = r"""
+const CACHE = 'mibiblioteca-v1';
+const APP_SHELL = ['/', '/login', '/manifest.webmanifest'];
+self.addEventListener('install', e => {
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(APP_SHELL).catch(()=>{})));
+  self.skipWaiting();
+});
+self.addEventListener('activate', e => {
+  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))));
+  self.clients.claim();
+});
+self.addEventListener('fetch', e => {
+  const req = e.request;
+  if (req.method !== 'GET') return;
+  const url = new URL(req.url);
+  if (url.origin !== location.origin) return;
+  // never cache API/stream/dl responses
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/dl/') || url.pathname.startsWith('/v1/')) {
+    e.respondWith(fetch(req));
+    return;
+  }
+  if (req.mode === 'navigate') {
+    e.respondWith(fetch(req).then(res => {
+      const copy = res.clone();
+      caches.open(CACHE).then(c => c.put(req, copy)).catch(()=>{});
+      return res;
+    }).catch(() => caches.match(req).then(r => r || caches.match('/login'))));
+    return;
+  }
+  e.respondWith(caches.match(req).then(cached => cached || fetch(req).then(res => {
+    if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)).catch(()=>{}); }
+    return res;
+  }).catch(() => cached)));
+});
+"""
     return Response(
-        content=js,
+        content=js.strip(),
         media_type="application/javascript",
         headers={"Cache-Control": "no-cache", "Service-Worker-Allowed": "/"}
     )
