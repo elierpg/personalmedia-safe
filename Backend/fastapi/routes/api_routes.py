@@ -1954,6 +1954,20 @@ async def update_settings_api(payload: dict) -> dict:
                         detail=f"Channel {', '.join(sorted(clash))} can't be in both {a} and {b} channels — each channel may only belong to one field."
                     )
 
+    #----- Accept legacy UI key names
+    if "elemento_formatter" in payload and "stream_formatter" not in payload:
+        payload["stream_formatter"] = payload.pop("elemento_formatter")
+    if "default_elementoing" in payload and "default_streaming" not in payload:
+        payload["default_streaming"] = payload.pop("default_elementoing")
+    if "cf_elemento_url" in payload and "cf_stream_url" not in payload:
+        payload["cf_stream_url"] = payload.pop("cf_elemento_url")
+    if "cf_elemento_secret" in payload and "cf_stream_secret" not in payload:
+        payload["cf_stream_secret"] = payload.pop("cf_elemento_secret")
+    if "upelemento_repo" in payload and "upstream_repo" not in payload:
+        payload["upstream_repo"] = payload.pop("upelemento_repo")
+    if "upelemento_branch" in payload and "upstream_branch" not in payload:
+        payload["upstream_branch"] = payload.pop("upelemento_branch")
+
     #----- Strip whitespace from string fields
     for key in ("tmdb_api", "base_url", "upstream_repo", "upstream_branch",
                 "admin_username", "admin_password", "session_secret", "http_proxy_url",

@@ -1639,7 +1639,7 @@ async function saveSettings() {
         rpdb_api_key:                  document.getElementById('rpdb_api_key').value.trim(),
         spatial_poster_enabled:        document.getElementById('spatial_poster_enabled').checked,
         spatial_poster:                document.getElementById('spatial_poster').value.trim(),
-        elemento_formatter:              document.getElementById('elemento_formatter').value,
+        stream_formatter:              document.getElementById('elemento_formatter').value,
         formatter_name:                document.getElementById('formatter_name').value,
         formatter_description:         document.getElementById('formatter_description').value,
         fanart_enabled:                document.getElementById('fanart_enabled').checked,
@@ -1647,8 +1647,8 @@ async function saveSettings() {
         fanart_shuffle:                document.getElementById('fanart_shuffle').checked,
         fanart_shuffle_interval:       parseInt(document.getElementById('fanart_shuffle_interval').value, 10) || 0,
         fanart_low_res_poster:         document.getElementById('fanart_low_res_poster').checked,
-        upelemento_repo:                 document.getElementById('upelemento_repo').value.trim(),
-        upelemento_branch:               document.getElementById('upelemento_branch').value.trim(),
+        upstream_repo:                 document.getElementById('upelemento_repo').value.trim(),
+        upstream_branch:               document.getElementById('upelemento_branch').value.trim(),
         auth_channels:                 collectList('auth_channels'),
         anime_channels:                collectAnimeChannels(),
         subscription:                  document.getElementById('subscription').checked,
@@ -1660,8 +1660,8 @@ async function saveSettings() {
         show_proxy_and_non_proxy_both: document.getElementById('show_proxy_and_non_proxy_both').checked,
         mediaflow_proxy:               document.getElementById('mediaflow_proxy').checked,
         mediaflow_password:            document.getElementById('mediaflow_password').value,
-        cf_elemento_url:                 document.getElementById('cf_elemento_url').value.trim(),
-        cf_elemento_secret:              document.getElementById('cf_elemento_secret').value.trim(),
+        cf_stream_url:                 document.getElementById('cf_elemento_url').value.trim(),
+        cf_stream_secret:              document.getElementById('cf_elemento_secret').value.trim(),
         webdav_user:                   document.getElementById('webdav_user').value.trim(),
         webdav_password:               document.getElementById('webdav_password').value,
         multi_tokens:                  collectList('multi_tokens'),
@@ -1675,7 +1675,7 @@ async function saveSettings() {
         delete_on_metadata_fail:       document.getElementById('delete_on_metadata_fail').checked,
     };
     const dsEl = document.getElementById('default_elementoing');
-    if (dsEl) payload.default_elementoing = dsEl.checked ? 'userbot' : 'bots';
+    if (dsEl) payload.default_streaming = dsEl.checked ? 'userbot' : 'bots';
 
     try {
         const res  = await fetch('/api/admin/settings', {
@@ -1780,7 +1780,7 @@ function renderSettings(s) {
     document.getElementById('show_proxy_and_non_proxy_both').checked = !!s.show_proxy_and_non_proxy_both;
     document.getElementById('global_search').checked = !!s.global_search;
     const dsEl = document.getElementById('default_elementoing');
-    if (dsEl) dsEl.checked = s.default_elementoing === 'userbot';
+    if (dsEl) dsEl.checked = (s.default_streaming || s.default_elementoing) === 'userbot';
     document.getElementById('announce_new_content').checked = !!s.announce_new_content;
     document.getElementById('delete_on_metadata_fail').checked = !!s.delete_on_metadata_fail;
     toggleSubFields();
@@ -1799,7 +1799,7 @@ function renderSettings(s) {
     document.getElementById('rpdb_api_key').value = s.rpdb_api_key || '';
     document.getElementById('spatial_poster_enabled').checked = !!s.spatial_poster_enabled;
     document.getElementById('spatial_poster').value = s.spatial_poster || '';
-    document.getElementById('elemento_formatter').value = s.elemento_formatter || 'default';
+    document.getElementById('elemento_formatter').value = s.stream_formatter || s.elemento_formatter || 'default';
     document.getElementById('formatter_name').value = s.formatter_name || '';
     document.getElementById('formatter_description').value = s.formatter_description || '';
     toggleFormatter();
@@ -1810,14 +1810,14 @@ function renderSettings(s) {
     document.getElementById('fanart_low_res_poster').checked = (s.fanart_low_res_poster ?? true);
     togglePosterProvider();
     toggleFanartShuffle();
-    document.getElementById('upelemento_repo').value = s.upelemento_repo || '';
-    document.getElementById('upelemento_branch').value = s.upelemento_branch || '';
+    document.getElementById('upelemento_repo').value = s.upstream_repo || s.upelemento_repo || '';
+    document.getElementById('upelemento_branch').value = s.upstream_branch || s.upelemento_branch || '';
     document.getElementById('subscription_group_id').value = s.subscription_group_id || 0;
     document.getElementById('http_proxy_url').value = s.http_proxy_url || '';
     document.getElementById('mediaflow_proxy').checked = !!s.mediaflow_proxy;
     document.getElementById('mediaflow_password').value = s.mediaflow_password || '';
-    document.getElementById('cf_elemento_url').value = s.cf_elemento_url || '';
-    document.getElementById('cf_elemento_secret').value = s.cf_elemento_secret || '';
+    document.getElementById('cf_elemento_url').value = s.cf_stream_url || s.cf_elemento_url || '';
+    document.getElementById('cf_elemento_secret').value = s.cf_stream_secret || s.cf_elemento_secret || '';
     const wu = document.getElementById('webdav_user');
     if (wu) wu.value = s.webdav_user || '';
     const wp = document.getElementById('webdav_password');
