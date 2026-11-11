@@ -92,6 +92,10 @@ async def _activate(session_string: str) -> None:
 
 
 
+#----- Worker sync (Cloudflare removed in this build)
+def _sync_worker() -> None:
+    return None
+
 async def _deactivate() -> None:
     try:
         if botmod.Userbot is not None:
