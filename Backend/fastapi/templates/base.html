@@ -565,7 +565,7 @@ if (!navigator.clipboard) Object.defineProperty(navigator, 'clipboard', { value:
 </script>
 </head>
 
-<body class="antialiased" style="padding-top: calc(8.25rem + env(safe-area-inset-top, 0px)); padding-bottom: calc(2rem + env(safe-area-inset-bottom, 0px));">
+<body class="antialiased" style="padding-top: calc(9.5rem + env(safe-area-inset-top, 0px)); padding-bottom: calc(2rem + env(safe-area-inset-bottom, 0px));">
 <div id="update-banner" class="hidden fixed top-0 left-0 right-0 z-[60] px-3 pointer-events-none" style="padding-top: calc(0.75rem + env(safe-area-inset-top, 0px));">
   <div class="pointer-events-auto mx-auto max-w-6xl rounded-2xl border border-amber-400/40 bg-amber-500/95 text-black shadow-[0_12px_40px_rgba(0,0,0,0.35)] px-4 py-3 sm:px-5 flex items-start sm:items-center gap-3">
     <div class="shrink-0 w-9 h-9 rounded-xl bg-black/15 flex items-center justify-center mt-0.5 sm:mt-0">
@@ -698,7 +698,7 @@ if (!navigator.clipboard) Object.defineProperty(navigator, 'clipboard', { value:
     </div>
 </nav>
 
-<main class="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4 sm:mt-6">
+<main class="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6 sm:mt-8">
     {% block content %}{% endblock %}
 </main>
 
@@ -922,13 +922,13 @@ if(navContainer) {
             requestAnimationFrame(() => {
                 const h = banner.offsetHeight || 72;
                 navbar.style.top = `max(calc(${h + 20}px + env(safe-area-inset-top, 0px)), calc(${h + 20}px))`;
-                document.body.style.paddingTop = `calc(${h + 124}px + env(safe-area-inset-top, 0px))`;
+                document.body.style.paddingTop = `calc(${h + 144}px + env(safe-area-inset-top, 0px))`;
                 if (mainEl) mainEl.style.marginTop = '0';
             });
         } else {
             banner.classList.add('hidden');
             navbar.style.top = 'max(calc(env(safe-area-inset-top, 0px) + 1.25rem), calc(env(safe-area-inset-top, 0px) + 20px))';
-            document.body.style.paddingTop = 'calc(8.25rem + env(safe-area-inset-top, 0px))';
+            document.body.style.paddingTop = 'calc(9.5rem + env(safe-area-inset-top, 0px))';
             if (mainEl) mainEl.style.marginTop = '';
         }
     }
