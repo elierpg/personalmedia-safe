@@ -1717,7 +1717,7 @@
         const allResults = [];
         const pendingRows = {};
 
-        const es = new EventSource(`/api/system/speedtest/elemento?${params}`);
+        const es = new EventSource(`/api/system/speedtest/stream?${params}`);
         window._stEventSource = es;
 
         function updateSummary() {
