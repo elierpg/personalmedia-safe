@@ -2407,7 +2407,13 @@ async def import_config_api(payload: dict) -> dict:
 
 #----- Lightweight liveness probe; start_time changes on every boot (restart detection)
 async def health_api() -> dict:
-    return {"status": "ok", "start_time": StartTime, "version": __version__}
+    from Backend.helper.pinger import get_ping_status
+    return {
+        "status": "ok",
+        "start_time": StartTime,
+        "version": __version__,
+        "keepalive": get_ping_status(),
+    }
 
 
 async def version_status_api(force: bool = False) -> dict:
