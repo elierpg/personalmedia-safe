@@ -357,9 +357,13 @@ self.addEventListener('fetch', e => {
         headers={"Cache-Control": "no-cache", "Service-Worker-Allowed": "/"}
     )
 
+#----- Public liveness probe (no auth, no DB). Used by the keep-alive pinger and uptime monitors.
 @app.get("/status")
 async def public_status():
-    return {"status": "ok", "version": __version__}
+    return JSONResponse(
+        {"status": "ok", "version": __version__},
+        headers={"Cache-Control": "no-store, no-cache, max-age=0"},
+    )
 
 @app.get("/open/{app_name}/{media_type}/{content_id}", response_class=HTMLResponse)
 async def open_in_app(app_name: str, media_type: str, content_id: str, _: bool = Depends(require_auth)):
