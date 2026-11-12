@@ -711,7 +711,8 @@ if (!navigator.clipboard) Object.defineProperty(navigator, 'clipboard', { value:
     </div>
 </footer>
     
-<div id="toast-container" class="fixed top-4 right-4 z-[9999] space-y-3 pointer-events-none"></div>
+<div id="toast-container" role="region" aria-label="Notifications" class="fixed top-4 right-4 z-[9999] space-y-3 pointer-events-none"></div>
+<div id="toast-announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
     
 <script>
 const btn = document.getElementById('menu-btn');
@@ -792,6 +793,17 @@ function showToast(message, type = 'info', title = '', duration = 2600) {
     `;
 
     container.appendChild(toast);
+
+    const announcement = [title, message].filter(Boolean).join('. ');
+    if ('ariaNotify' in document) {
+        document.ariaNotify(announcement);
+    } else {
+        const announcer = document.getElementById('toast-announcer');
+        if (announcer) {
+            announcer.textContent = '';
+            requestAnimationFrame(() => { announcer.textContent = announcement; });
+        }
+    }
 
     setTimeout(() => {
         toast.style.animation = 'toast-out 180ms ease-in forwards';

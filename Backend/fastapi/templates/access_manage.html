@@ -112,8 +112,24 @@
     .pagination-text { color: var(--text-sec); }
     .pagination-btn { min-width: 92px; }
 
-    .modal-backdrop { background: rgba(4, 8, 18, 0.58); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
-    .modal-glass { border-radius: 1.6rem; padding: 1.4rem; border: 1px solid color-mix(in srgb, var(--border) 95%, transparent); width: min(92vw, 32rem); }
+    .modal-dialog {
+        padding: 0;
+        border: 0;
+        background: transparent;
+        max-width: none;
+        max-height: none;
+        overflow: visible;
+        color: var(--text);
+    }
+    .modal-dialog:modal { overscroll-behavior: contain; }
+    .modal-dialog::backdrop {
+        background: rgba(4, 8, 18, 0.58);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        overflow: hidden;
+        overscroll-behavior: contain;
+    }
+    .modal-glass { border-radius: 1.6rem; padding: 1.4rem; border: 1px solid color-mix(in srgb, var(--border) 95%, transparent); width: min(92vw, 32rem); max-block-size: calc(100dvh - 2rem); overflow-y: auto; }
     .modal-field label { color: var(--text-sec); font-size: 0.82rem; font-weight: 700; margin-bottom: 0.55rem; display: block; }
 
     .text-soft { color: var(--text-sec); }
@@ -195,16 +211,16 @@
         </div>
 
         <div class="desktop-table-wrap table-shell">
-            <div class="overflow-x-auto no-scrollbar">
+            <div class="overflow-x-auto no-scrollbar" tabindex="0" role="region" aria-label="Access tokens table">
                 <table class="access-table min-w-[1180px] text-sm">
                     <thead>
                         <tr>
-                            <th class="px-4 py-4 text-left font-semibold">Status</th>
-                            <th class="px-4 py-4 text-left font-semibold">User</th>
-                            <th class="px-4 py-4 text-left font-semibold">Addon Link</th>
-                            <th class="px-4 py-4 text-left font-semibold">Usage / Limits</th>
-                            <th class="px-4 py-4 text-left font-semibold">Expires</th>
-                            <th class="px-4 py-4 text-center font-semibold">Actions</th>
+                            <th scope="col" class="px-4 py-4 text-left font-semibold">Status</th>
+                            <th scope="col" class="px-4 py-4 text-left font-semibold">User</th>
+                            <th scope="col" class="px-4 py-4 text-left font-semibold">Addon Link</th>
+                            <th scope="col" class="px-4 py-4 text-left font-semibold">Usage / Limits</th>
+                            <th scope="col" class="px-4 py-4 text-left font-semibold">Expires</th>
+                            <th scope="col" class="px-4 py-4 text-center font-semibold">Actions</th>
                         </tr>
                     </thead>
                     <tbody id="token-table-body">
@@ -230,11 +246,11 @@
 </div>
 
 <!-- Create Token Modal -->
-<div id="create-modal" class="fixed inset-0 hidden z-50 modal-backdrop items-center justify-center p-4">
+<dialog id="create-modal" class="modal-dialog" aria-labelledby="create-modal-title" closedby="any">
     <div class="modal-glass">
         <div class="flex items-start justify-between gap-4 mb-5">
             <div>
-                <h3 class="text-xl font-bold section-title">Create Token</h3>
+                <h3 id="create-modal-title" class="text-xl font-bold section-title">Create Token</h3>
                 <p class="text-sm text-soft mt-1">Generate a new token de acceso.</p>
             </div>
             <button onclick="closeModal('create-modal')" class="glass-btn rounded-full w-10 h-10 flex items-center justify-center"><i class="fas fa-xmark"></i></button>
@@ -243,7 +259,7 @@
         <div class="space-y-4">
             <div class="modal-field">
                 <label>Token Name</label>
-                <input type="text" id="create-name" placeholder="e.g. Living Room TV" class="glass-input">
+                <input type="text" id="create-name" placeholder="e.g. Living Room TV" class="glass-input" autofocus>
             </div>
             <div class="grid grid-cols-2 gap-3">
                 <div class="modal-field">
@@ -266,14 +282,14 @@
             <button onclick="createToken()" class="glass-btn glass-btn-primary rounded-2xl px-5 py-3 text-sm font-bold">Create Token</button>
         </div>
     </div>
-</div>
+</dialog>
 
 <!-- Edit Limits Modal -->
-<div id="limits-modal" class="fixed inset-0 hidden z-50 modal-backdrop items-center justify-center p-4">
+<dialog id="limits-modal" class="modal-dialog" aria-labelledby="limits-modal-title" closedby="any">
     <div class="modal-glass">
         <div class="flex items-start justify-between gap-4 mb-5">
             <div>
-                <h3 class="text-xl font-bold section-title">Edit Data Limits</h3>
+                <h3 id="limits-modal-title" class="text-xl font-bold section-title">Edit Data Limits</h3>
                 <p class="text-sm text-soft mt-1">Set 0 for unlimited.</p>
             </div>
             <button onclick="closeModal('limits-modal')" class="glass-btn rounded-full w-10 h-10 flex items-center justify-center"><i class="fas fa-xmark"></i></button>
@@ -282,7 +298,7 @@
         <div class="grid grid-cols-2 gap-3">
             <div class="modal-field">
                 <label>Daily (GB)</label>
-                <input type="number" id="limits-daily" min="0" step="0.1" class="glass-input">
+                <input type="number" id="limits-daily" min="0" step="0.1" class="glass-input" autofocus>
             </div>
             <div class="modal-field">
                 <label>Monthly (GB)</label>
@@ -294,10 +310,10 @@
             <button onclick="saveLimits()" class="glass-btn glass-btn-primary rounded-2xl px-5 py-3 text-sm font-bold">Save</button>
         </div>
     </div>
-</div>
+</dialog>
 
 <!-- Assign Plan Modal -->
-<div id="assign-modal" class="fixed inset-0 hidden z-50 modal-backdrop items-center justify-center p-4">
+<dialog id="assign-modal" class="modal-dialog" aria-labelledby="assign-modal-title" closedby="any">
     <div class="modal-glass">
         <div class="flex items-start justify-between gap-4 mb-5">
             <div>
@@ -311,7 +327,7 @@
         <div class="space-y-4">
             <div class="modal-field" id="assign-plan-field">
                 <label>Select a Plan</label>
-                <select id="assign-plan-select" class="glass-select"><option value="">— Select plan —</option></select>
+                <select id="assign-plan-select" class="glass-select" autofocus><option value="">— Select plan —</option></select>
             </div>
             <div class="modal-field">
                 <label id="assign-days-label">Or enter custom days</label>
@@ -329,10 +345,10 @@
             <button onclick="assignPlan()" class="glass-btn glass-btn-primary rounded-2xl px-5 py-3 text-sm font-bold">Assign &amp; Activate</button>
         </div>
     </div>
-</div>
+</dialog>
 
 <!-- Sub Action Modal -->
-<div id="sub-action-modal" class="fixed inset-0 hidden z-50 modal-backdrop items-center justify-center p-4">
+<dialog id="sub-action-modal" class="modal-dialog" aria-labelledby="sub-action-title" closedby="any">
     <div class="modal-glass">
         <div class="flex items-start justify-between gap-4 mb-5">
             <div>
@@ -346,14 +362,14 @@
         <input type="hidden" id="sub-action-action">
         <div id="sub-action-days-group" class="modal-field">
             <label>Number of Days</label>
-            <input type="number" id="sub-action-days" value="30" min="1" class="glass-input">
+            <input type="number" id="sub-action-days" value="30" min="1" class="glass-input" autofocus>
         </div>
         <div class="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-6">
             <button onclick="closeModal('sub-action-modal')" class="glass-btn rounded-2xl px-5 py-3 text-sm font-bold">Cancel</button>
             <button id="sub-action-btn" onclick="submitSubAction()" class="glass-btn glass-btn-success rounded-2xl px-5 py-3 text-sm font-bold">Confirm</button>
         </div>
     </div>
-</div>
+</dialog>
 
 <script>
     let allTokens = [];
@@ -570,13 +586,15 @@
 
     function openModal(id) {
         const m = document.getElementById(id);
-        m.classList.remove('hidden'); m.classList.add('flex');
-        document.body.classList.add('overflow-hidden');
+        if (!m) return;
+        if (typeof m.showModal === 'function') m.showModal();
+        else m.setAttribute('open', '');
     }
     function closeModal(id) {
         const m = document.getElementById(id);
-        m.classList.add('hidden'); m.classList.remove('flex');
-        document.body.classList.remove('overflow-hidden');
+        if (!m) return;
+        if (typeof m.close === 'function' && m.open) m.close();
+        else m.removeAttribute('open');
     }
 
     function openCreateModal() {
@@ -741,12 +759,23 @@
         catch { prompt('Copy this link:', url); }
     }
 
-    ['create-modal', 'limits-modal', 'assign-modal', 'sub-action-modal'].forEach(id => {
-        document.getElementById(id).addEventListener('click', function (e) { if (e.target === this) closeModal(id); });
-    });
-    document.addEventListener('keydown', e => {
-        if (e.key === 'Escape') ['create-modal', 'limits-modal', 'assign-modal', 'sub-action-modal'].forEach(closeModal);
-    });
+    // Light-dismiss fallback for browsers without <dialog closedby> (Safari).
+    if (!('closedBy' in HTMLDialogElement.prototype)) {
+        ['create-modal', 'limits-modal', 'assign-modal', 'sub-action-modal'].forEach(id => {
+            const dialog = document.getElementById(id);
+            if (!dialog) return;
+            let pressedOutside = false;
+            const outside = (e) => {
+                const r = dialog.getBoundingClientRect();
+                return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+            };
+            dialog.addEventListener('pointerdown', (e) => { pressedOutside = outside(e); });
+            dialog.addEventListener('pointerup', (e) => {
+                if (pressedOutside && outside(e)) dialog.close();
+                pressedOutside = false;
+            });
+        });
+    }
 
     loadTokens();
 </script>
