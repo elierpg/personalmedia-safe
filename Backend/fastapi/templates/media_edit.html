@@ -162,14 +162,27 @@
   }
 
   .season-content {
-    transition: max-height 0.32s ease, opacity 0.25s ease, transform 0.25s ease;
     overflow: hidden;
+    transition: max-height 0.32s ease, opacity 0.25s ease, transform 0.25s ease;
   }
 
   .season-collapsed {
     max-height: 0 !important;
     opacity: 0;
     transform: translateY(-4px);
+  }
+
+  /* Progressive enhancement: animate the real block size; the JS measurement
+     above remains the fallback for browsers without interpolate-size. */
+  @supports (interpolate-size: allow-keywords) {
+    .season-content {
+      block-size: auto;
+      transition: block-size 0.32s ease, opacity 0.25s ease, transform 0.25s ease;
+    }
+    .season-collapsed {
+      max-height: none !important;
+      block-size: 0;
+    }
   }
 
   .break-all {
@@ -652,7 +665,7 @@
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                                 <span class="hidden sm:inline">Delete Season</span>
                             </button>
-                            <button type="button" onclick="toggleSeason({{ loop.index0 }})" class="btn-ui btn-ghost px-3 py-2">
+                            <button type="button" onclick="toggleSeason({{ loop.index0 }})" aria-expanded="{{ 'true' if loop.first else 'false' }}" aria-controls="season-content-{{ loop.index0 }}" class="btn-ui btn-ghost px-3 py-2">
                                 <svg id="season-arrow-{{ loop.index0 }}" class="w-4 h-4 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                                 </svg>
@@ -922,6 +935,12 @@
     const dbIndex = {{ db_index }};
     const mediaType = '{{ media_type }}';
 
+    // Native keyword interpolation is a progressive enhancement; the
+    // scrollHeight measurement below stays as the cross-browser fallback.
+    const SEASON_SIZE_INTERPOLATION = typeof CSS !== 'undefined'
+        && typeof CSS.supports === 'function'
+        && CSS.supports('interpolate-size', 'allow-keywords');
+
     let selectedRescanMatch = null;
     let latestRescanResults = [];
 
@@ -1109,19 +1128,30 @@
         if (!content || !arrow) return;
 
         const collapsed = content.classList.contains('season-collapsed');
+        const trigger = arrow.closest('button');
+        if (trigger) trigger.setAttribute('aria-expanded', String(collapsed));
+
         if (collapsed) {
+            content.inert = false;
             content.classList.remove('season-collapsed');
             arrow.style.transform = 'rotate(0deg)';
-            requestAnimationFrame(() => {
-                content.style.maxHeight = content.scrollHeight + 'px';
-                content.style.opacity = '1';
-            });
+            if (!SEASON_SIZE_INTERPOLATION) {
+                requestAnimationFrame(() => {
+                    content.style.maxHeight = content.scrollHeight + 'px';
+                    content.style.opacity = '1';
+                });
+            }
         } else {
-            content.style.maxHeight = content.scrollHeight + 'px';
+            if (!SEASON_SIZE_INTERPOLATION) {
+                content.style.maxHeight = content.scrollHeight + 'px';
+            }
             requestAnimationFrame(() => {
                 content.classList.add('season-collapsed');
-                content.style.maxHeight = '0px';
-                content.style.opacity = '0';
+                content.inert = true;
+                if (!SEASON_SIZE_INTERPOLATION) {
+                    content.style.maxHeight = '0px';
+                    content.style.opacity = '0';
+                }
                 arrow.style.transform = 'rotate(-90deg)';
             });
         }
@@ -1164,6 +1194,7 @@
     }
 
     function _refreshSeasonHeight(node) {
+        if (SEASON_SIZE_INTERPOLATION) return;
         const content = node.closest('.season-content') || (node.querySelector ? node.querySelector('.season-content') : null);
         if (content && !content.classList.contains('season-collapsed')) {
             requestAnimationFrame(() => { content.style.maxHeight = content.scrollHeight + 'px'; });
@@ -1600,11 +1631,18 @@
         document.querySelectorAll('.season-content').forEach((content, index) => {
             if (index > 0) {
                 content.classList.add('season-collapsed');
-                content.style.maxHeight = '0px';
-                content.style.opacity = '0';
+                content.inert = true;
+                if (!SEASON_SIZE_INTERPOLATION) {
+                    content.style.maxHeight = '0px';
+                    content.style.opacity = '0';
+                }
                 const arrow = document.getElementById(`season-arrow-${index}`);
-                if (arrow) arrow.style.transform = 'rotate(-90deg)';
-            } else {
+                if (arrow) {
+                    arrow.style.transform = 'rotate(-90deg)';
+                    const trigger = arrow.closest('button');
+                    if (trigger) trigger.setAttribute('aria-expanded', 'false');
+                }
+            } else if (!SEASON_SIZE_INTERPOLATION) {
                 content.style.maxHeight = content.scrollHeight + 'px';
                 content.style.opacity = '1';
             }
@@ -2102,6 +2140,7 @@
     }
 
     function refreshVisibleSeasonHeights() {
+        if (SEASON_SIZE_INTERPOLATION) return;
         document.querySelectorAll('.season-content').forEach(content => {
             if (!content.classList.contains('season-collapsed')) {
                 content.style.maxHeight = content.scrollHeight + 'px';

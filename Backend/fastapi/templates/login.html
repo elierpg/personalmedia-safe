@@ -33,21 +33,23 @@
             <form method="post" class="space-y-4">
 
                 <div class="space-y-1.5">
-                    <label class="text-[11px] font-bold uppercase tracking-widest text-text-secondary ml-1">Username</label>
+                    <label for="username" class="text-[11px] font-bold uppercase tracking-widest text-text-secondary ml-1">Username</label>
                     <div class="relative group">
                         <i class="fa-solid fa-user absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary group-focus-within:text-primary transition-colors text-sm"></i>
-                        <input type="text" name="username" required
+                        <input type="text" id="username" name="username" required
+                            autocomplete="username" spellcheck="false" autocorrect="off" autocapitalize="off" enterkeyhint="next"
                             class="w-full min-h-[48px] pl-11 pr-4 py-3.5 bg-background/50 rounded-2xl border border-hairline focus:border-primary/50 focus:ring-4 focus:ring-primary/10 outline-none transition-all text-text text-[16px]"
                             placeholder="Admin ID">
                     </div>
                 </div>
 
                 <div class="space-y-1.5">
-                    <label class="text-[11px] font-bold uppercase tracking-widest text-text-secondary ml-1">Password</label>
+                    <label for="password" class="text-[11px] font-bold uppercase tracking-widest text-text-secondary ml-1">Password</label>
                     <div class="relative group">
                         <i class="fa-solid fa-lock absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary group-focus-within:text-primary transition-colors text-sm"></i>
                         
                         <input type="password" id="password" name="password" required
+                            autocomplete="current-password" enterkeyhint="done"
                             class="w-full min-h-[48px] pl-11 pr-12 py-3.5 bg-background/50 rounded-2xl border border-hairline focus:border-primary/50 focus:ring-4 focus:ring-primary/10 outline-none transition-all text-text text-[16px]"
                             placeholder="••••••••">
 

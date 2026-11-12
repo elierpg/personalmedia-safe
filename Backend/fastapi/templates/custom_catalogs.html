@@ -258,6 +258,17 @@
     max-height: 286px;
     overflow: hidden;
   }
+  /* Progressive enhancement: animate the real block size instead of a max-height proxy */
+  @supports (interpolate-size: allow-keywords) {
+    .catalog-list-wrapper {
+      block-size: auto;
+      transition: block-size 0.35s ease;
+    }
+    .catalog-list-wrapper.collapsed {
+      max-height: none;
+      block-size: 286px;
+    }
+  }
   .catalog-list-wrapper.collapsed::after {
     content: "";
     position: absolute;
@@ -506,7 +517,7 @@
             <div class="skeleton"></div>
           </div>
         </div>
-        <button id="catalog-expand-btn" onclick="toggleCatalogExpand()" class="btn-ui btn-ghost w-full hidden">▾ Show all catalogs</button>
+        <button id="catalog-expand-btn" onclick="toggleCatalogExpand()" aria-expanded="false" aria-controls="catalog-list-wrapper" class="btn-ui btn-ghost w-full hidden">▾ Show all catalogs</button>
       </div>
     </div>
 
@@ -822,10 +833,14 @@ function renderCatalogs() {
     if (expandBtn) {
       expandBtn.classList.remove('hidden');
       expandBtn.textContent = catalogListExpanded ? '▴ Collapse list' : '▾ Show all catalogs';
+      expandBtn.setAttribute('aria-expanded', String(catalogListExpanded));
     }
     if (wrapper) wrapper.classList.toggle('collapsed', !catalogListExpanded);
   } else {
-    if (expandBtn) expandBtn.classList.add('hidden');
+    if (expandBtn) {
+      expandBtn.classList.add('hidden');
+      expandBtn.setAttribute('aria-expanded', 'true');
+    }
     if (wrapper) wrapper.classList.remove('collapsed');
   }
 }
@@ -1192,7 +1207,10 @@ function toggleCatalogExpand() {
   const wrapper = document.getElementById('catalog-list-wrapper');
   const btn = document.getElementById('catalog-expand-btn');
   wrapper.classList.toggle('collapsed', !catalogListExpanded);
-  if (btn) btn.textContent = catalogListExpanded ? '▴ Collapse list' : '▾ Show all catalogs';
+  if (btn) {
+    btn.textContent = catalogListExpanded ? '▴ Collapse list' : '▾ Show all catalogs';
+    btn.setAttribute('aria-expanded', String(catalogListExpanded));
+  }
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
