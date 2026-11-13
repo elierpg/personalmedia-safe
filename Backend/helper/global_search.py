@@ -659,7 +659,7 @@ async def _run_true_global_search(
                             if parsed is None:
                                 continue
                             parts = await _gather_split_parts(botmod.Userbot, chat_id, message.id, base)
-                            if len(parts) < 2:
+                            if len(parts) < 2 or sorted(parts) != list(range(1, len(parts) + 1)):
                                 continue
                             split_groups[group_key] = {
                                 "chat_id": chat_id,

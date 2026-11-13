@@ -107,6 +107,10 @@ body::before {
 
 .glass-pill { border-radius: 9999px; }
 
+/* Component classes (e.g. .btn-ui) set a display value, so keep .hidden winning
+   unless a responsive variant (sm:flex, md:grid, …) is present on the element. */
+.hidden:not([class*=":flex"]):not([class*=":block"]):not([class*=":grid"]):not([class*=":inline"]):not([class*=":table"]) { display: none !important; }
+
 .surface-card {
     background: color-mix(in srgb, var(--card) 92%, var(--bg));
     border: 1px solid var(--hairline);

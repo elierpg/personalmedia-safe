@@ -417,11 +417,11 @@
         if (t.is_expired && !t.never_expires && !t.is_admin) {
             return `<div class="addon-box">
                 <span class="status-badge status-expired">Expired</span>
-                ${t.addon_url ? `<button onclick="copyLink('${escHtml(t.addon_url)}')" class="mt-3 text-xs font-semibold underline opacity-70 hover:opacity-100 transition">Copy URL (admin)</button>` : ''}
+                ${t.addon_url ? `<button type="button" data-url="${escHtml(t.addon_url)}" onclick="copyLink(this.dataset.url)" class="mt-3 text-xs font-semibold underline opacity-70 hover:opacity-100 transition">Copy URL (admin)</button>` : ''}
             </div>`;
         }
         return t.addon_url
-            ? `<div class="addon-box"><button onclick="copyLink('${escHtml(t.addon_url)}')" class="glass-btn glass-btn-primary rounded-xl px-3 py-2 text-xs font-bold inline-flex items-center gap-2"><i class="fas fa-copy"></i> Copy Install Link</button></div>`
+            ? `<div class="addon-box"><button type="button" data-url="${escHtml(t.addon_url)}" onclick="copyLink(this.dataset.url)" class="glass-btn glass-btn-primary rounded-xl px-3 py-2 text-xs font-bold inline-flex items-center gap-2"><i class="fas fa-copy"></i> Copy Install Link</button></div>`
             : `<div class="addon-box text-soft text-xs">—</div>`;
     }
 
