@@ -1,287 +1,248 @@
 {% extends "base.html" %}
 
-{% block title %}Admin Dashboard - Mi Biblioteca{% endblock %}
+{% block title %}Admin — Mi Biblioteca{% endblock %}
 
 {% block content %}
 <style>
-  .db-wrap { display:flex; flex-direction:column; gap:1.25rem; }
-  .db-card {
-    background: var(--card);
-    border: 1px solid var(--hairline);
-    border-radius: 1.25rem;
-    box-shadow: 0 1px 2px rgba(0,0,0,.04);
-  }
-  .db-card-h {
-    padding: 1rem 1.25rem;
-    border-bottom: 1px solid var(--hairline);
-    display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap;
-  }
-  .db-card-b { padding: 1rem 1.25rem; }
-  @media (min-width: 640px){ .db-card-h{padding:1.1rem 1.5rem;} .db-card-b{padding:1.25rem 1.5rem;} }
-  .db-title { font-size:1.125rem; font-weight:800; letter-spacing:-0.02em; color:var(--text); }
-  .db-sub { font-size:.875rem; color:var(--text-sec); margin-top:.2rem; }
-  .db-hero {
-    background: linear-gradient(180deg, color-mix(in srgb, var(--primary) 10%, var(--card)) 0%, var(--card) 100%);
-  }
-  html.style-clean .db-hero { background: var(--card); }
-  .db-kpi {
-    position:relative; overflow:hidden;
-    padding:1.1rem 1.15rem; border-radius:1.15rem;
-    background: var(--card); border:1px solid var(--hairline);
-  }
-  .db-kpi-icon {
-    width:2.75rem; height:2.75rem; border-radius:.9rem; display:flex; align-items:center; justify-content:center;
-    background: color-mix(in srgb, var(--primary) 12%, transparent); color:var(--primary);
-    border:1px solid color-mix(in srgb, var(--primary) 18%, transparent);
-  }
-  .db-kpi-label { font-size:.78rem; font-weight:700; color:var(--text-sec); text-transform:uppercase; letter-spacing:.06em; }
-  .db-kpi-value { font-size:2rem; line-height:1.1; font-weight:850; letter-spacing:-0.03em; color:var(--text); margin-top:.35rem; font-variant-numeric: tabular-nums; }
-  .db-kpi-note { font-size:.8rem; color:var(--text-sec); margin-top:.35rem; }
-  .pill {
-    display:inline-flex; align-items:center; gap:.4rem; padding:.4rem .75rem; border-radius:9999px;
-    font-size:.75rem; font-weight:700; border:1px solid var(--hairline);
-    background: var(--surface-2, color-mix(in srgb, var(--bg) 60%, transparent)); color:var(--text);
-  }
-  .btn-ui {
-    display:inline-flex; align-items:center; justify-content:center; gap:.5rem;
-    min-height:44px; padding:.6rem 1rem; border-radius:.9rem; font-size:.875rem; font-weight:700;
-    border:1px solid var(--hairline); background: var(--surface-2, color-mix(in srgb, var(--card) 90%, var(--bg)));
-    color:var(--text); transition:all .15s ease; cursor:pointer;
-  }
-  .btn-ui:hover { filter:brightness(1.05); transform:translateY(-1px); }
-  .btn-ui:active { transform:translateY(0); }
-  .btn-danger { background: color-mix(in srgb, #ef4444 12%, var(--card)); color:#ef4444; border-color: color-mix(in srgb, #ef4444 25%, var(--hairline)); }
-  .btn-ghost { background: transparent; }
-  .btn-primary-solid { background: var(--primary); color: #fff; border-color: transparent; }
-  .status-badge, .hz-badge {
-    display:inline-flex; align-items:center; gap:.35rem; padding:.28rem .6rem; border-radius:9999px;
-    font-size:.7rem; font-weight:800; letter-spacing:.04em; text-transform:uppercase;
-  }
-  .status-good,.s-ok { background: color-mix(in srgb,#22c55e 14%,transparent); color:#22c55e; border:1px solid color-mix(in srgb,#22c55e 22%,transparent); }
-  .status-warn,.s-degraded,.s-warning,.s-not_configured { background: color-mix(in srgb,#f59e0b 14%,transparent); color:#f59e0b; border:1px solid color-mix(in srgb,#f59e0b 22%,transparent); }
-  .status-bad,.s-down,.s-error,.s-critical { background: color-mix(in srgb,#ef4444 14%,transparent); color:#ef4444; border:1px solid color-mix(in srgb,#ef4444 22%,transparent); }
-  .empty-state { color:var(--text-sec); text-align:center; padding:2rem 1rem; font-size:.9rem; }
-
-  .hz-card { border:1px solid var(--hairline); background: color-mix(in srgb, var(--card) 96%, var(--bg)); border-radius:1rem; padding:1rem 1.1rem; }
-  .hz-top { display:flex; align-items:center; justify-content:space-between; gap:.5rem; }
-  .hz-name { font-weight:800; font-size:.92rem; display:flex; align-items:center; gap:.5rem; color:var(--text); }
-  .hz-msg { color:var(--text-sec); font-size:.82rem; margin-top:.55rem; word-break:break-word; }
-  .hz-item { display:flex; align-items:center; justify-content:space-between; gap:.6rem; font-size:.84rem; border-top:1px solid var(--hairline); padding-top:.5rem; margin-top:.5rem; }
-  .hz-item .lbl { display:flex; align-items:center; gap:.45rem; font-weight:600; color:var(--text); }
-  .hz-item .meta { color:var(--text-sec); font-size:.76rem; text-align:right; }
-  .hz-subhead { font-weight:800; font-size:.95rem; margin:.25rem 0 .85rem; display:flex; align-items:center; gap:.5rem; color:var(--text); }
-  .mini-dot { width:.55rem; height:.55rem; border-radius:999px; display:inline-block; }
-  .hz-usebar { height:6px; border-radius:999px; background: var(--surface-3, rgba(127,127,127,.18)); overflow:hidden; width:96px; margin-top:4px; margin-left:auto; }
-  .hz-usebar > span { display:block; height:100%; background: var(--primary); border-radius:999px; }
-
-  .ins-stat { background: color-mix(in srgb, var(--card) 96%, var(--bg)); border:1px solid var(--hairline); border-radius:1rem; padding:1rem; text-align:center; }
-  .ins-v { font-size:1.6rem; font-weight:850; letter-spacing:-0.02em; color:var(--text); }
-  .ins-l { font-size:.72rem; text-transform:uppercase; letter-spacing:.06em; color:var(--text-sec); margin-top:.25rem; font-weight:700; }
-  .ins-col { background: color-mix(in srgb, var(--card) 96%, var(--bg)); border:1px solid var(--hairline); border-radius:1rem; padding:1rem; }
-  .ins-h { font-weight:800; font-size:.95rem; margin-bottom:.85rem; color:var(--text); }
-  .ins-list { display:flex; flex-direction:column; gap:.65rem; }
-  .ins-row { display:flex; align-items:center; justify-content:space-between; gap:.75rem; font-size:.85rem; }
-  .ins-row .name { color:var(--text); font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .ins-row .val { color:var(--text-sec); font-size:.76rem; flex-shrink:0; font-variant-numeric:tabular-nums; }
-  .ins-bar { height:6px; border-radius:999px; background: var(--primary); opacity:.85; margin-top:4px; }
-  .ins-empty { color:var(--text-sec); font-size:.84rem; }
-
-  .bot-table-wrap { overflow-x:auto; }
-  .bot-table { width:100%; border-collapse:collapse; font-size:.88rem; }
-  .bot-table th { text-align:center; font-size:.7rem; text-transform:uppercase; letter-spacing:.06em; color:var(--text-sec); padding:.65rem .75rem; border-bottom:1px solid var(--hairline); font-weight:800; }
-  .bot-table th:first-child { text-align:left; }
-  .bot-table td { padding:.7rem .75rem; text-align:center; border-bottom:1px solid var(--hairline); color:var(--text); }
-  .bot-table tr:last-child td { border-bottom:none; }
-  .bot-table .bt-name { text-align:left; font-weight:700; display:flex; align-items:center; gap:.5rem; }
-
-  .table-shell { overflow:hidden; border:1px solid var(--hairline); border-radius:1rem; }
-  .table-scroll { overflow:auto; max-height:62vh; }
-  .table-ui { width:100%; min-width:920px; border-collapse:separate; border-spacing:0; }
-  .table-ui thead th {
-    color:var(--text-sec); font-size:.72rem; font-weight:800; text-transform:uppercase; letter-spacing:.06em;
-    padding: .9rem 1rem; background: color-mix(in srgb, var(--card) 97%, var(--bg));
-    border-bottom:1px solid var(--hairline); position:sticky; top:0; z-index:2; text-align:left;
-  }
-  .table-ui tbody td { padding:.9rem 1rem; border-bottom:1px solid var(--hairline); color:var(--text); vertical-align:middle; font-size:.9rem; }
-  .table-ui tbody tr:hover td { background: color-mix(in srgb, var(--primary) 4%, transparent); }
-  .table-ui tbody tr:last-child td { border-bottom:none; }
-  .elemento-id { max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:inline-block; vertical-align:bottom; }
-  .title-cell { max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .muted { color:var(--text-sec); }
-
-  .mobile-list { display:none; }
-  .mobile-card { background: color-mix(in srgb, var(--card) 96%, var(--bg)); border:1px solid var(--hairline); border-radius:1.1rem; padding:1rem; }
-  .mobile-kv { display:grid; grid-template-columns: 100px 1fr; gap:.4rem .75rem; font-size:.86rem; }
-  .mobile-kv .key { color:var(--text-sec); font-weight:600; }
-  .analytics-mobile-card { padding:.85rem 1rem; }
-  .scroll-cap { max-height:62vh; overflow-y:auto; padding-right:2px; }
-  .loading-dot { display:inline-block; width:.45rem; height:.45rem; border-radius:9999px; background:var(--primary); animation:pulseDot 1.4s infinite ease-in-out; }
-  @keyframes pulseDot { 0%,100%{opacity:.4; transform:scale(.9)} 50%{opacity:1; transform:scale(1.1)} }
-
-  @media (max-width: 768px) {
-    .desktop-table { display:none; }
-    .mobile-list { display:grid; gap:.85rem; }
-    .db-kpi-value { font-size:1.75rem; }
+  .glass-card { background: var(--card); border: 1px solid var(--border); }
+  .glass-card-soft { background: var(--bg); border: 1px solid var(--border); }
+  .section-title { color: var(--text); font-weight: 600; letter-spacing: -0.01em; }
+  .muted { color: var(--text-sec); }
+  .pill { display: inline-flex; align-items: center; gap: .4rem; padding: .2rem .65rem; border-radius: 9999px; font-size: .75rem; font-weight: 500; border: 1px solid var(--border); color: var(--text-sec); white-space: nowrap; }
+  .metric-icon { width: 2.5rem; height: 2.5rem; border-radius: 9999px; display: grid; place-items: center; flex-shrink: 0; background: var(--card-high); color: var(--primary); }
+  .btn-ui { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; border-radius: 9999px; padding: .55rem 1.05rem; font-size: .88rem; font-weight: 500; border: 1px solid transparent; white-space: nowrap; transition: background-color .18s var(--ease), border-color .18s var(--ease), transform .12s var(--ease); }
+  .btn-ui:active { transform: scale(.97); }
+  .btn-ui.btn-danger { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); border-color: color-mix(in srgb, var(--danger) 30%, transparent); }
+  .btn-ui.btn-primary { background: var(--primary); color: var(--on-primary); }
+  .btn-ui.btn-ghost { background: transparent; color: var(--text); border-color: var(--border); }
+  .btn-ui.btn-ghost:hover { background: var(--card-high); }
+  .workload-row, .table-row-card { background: var(--bg); border: 1px solid var(--border); }
+  .status-badge { display: inline-flex; align-items: center; gap: .3rem; padding: .15rem .6rem; border-radius: 9999px; font-size: .72rem; font-weight: 500; white-space: nowrap; }
+  .status-good { background: color-mix(in srgb, var(--ok) 14%, transparent); color: var(--ok); }
+  .status-warn { background: color-mix(in srgb, var(--warn) 14%, transparent); color: var(--warn); }
+  .status-bad { background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger); }
+  .table-shell { overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+  .table-scroll { overflow: auto; max-height: 62vh; }
+  .table-ui { width: 100%; min-width: 880px; border-collapse: separate; border-spacing: 0; font-size: .88rem; }
+  .table-ui thead th { position: sticky; top: 0; z-index: 2; padding: .75rem 1rem; text-align: left; font-size: .72rem; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--text-sec); background: var(--card); border-bottom: 1px solid var(--border); }
+  .table-ui tbody td { padding: .8rem 1rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  .table-ui tbody tr:last-child td { border-bottom: 0; }
+  .table-ui tbody tr:hover td { background: var(--surface); }
+  .stream-id { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: bottom; }
+  .title-cell { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .empty-state { color: var(--text-sec); text-align: center; padding: 2rem 1rem; font-size: .9rem; }
+  .mobile-list { display: none; }
+  .mobile-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1rem; min-width: 0; }
+  .mobile-kv { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: .4rem .75rem; font-size: .85rem; }
+  .mobile-kv > * { min-width: 0; overflow-wrap: anywhere; }
+  .mobile-kv .key { color: var(--text-sec); }
+  .bot-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
+  .bot-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: .85rem; min-width: 0; }
+  .bot-stat-num { font-size: 1.1rem; font-weight: 600; line-height: 1.1; }
+  .bot-stat-label { font-size: .7rem; color: var(--text-sec); margin-top: .15rem; }
+  .analytics-mobile-card { padding: .85rem; border-radius: var(--radius-sm); }
+  .scroll-cap { max-height: 62vh; overflow-y: auto; }
+  .loading-dot { display: inline-block; width: .45rem; height: .45rem; border-radius: 9999px; background: var(--ok); animation: pulseDot 1.6s infinite ease-in-out; }
+  @keyframes pulseDot { 0%, 100% { opacity: .4; } 50% { opacity: 1; } }
+  @media (min-width: 640px) { .bot-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @media (min-width: 1024px) { .bot-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  @media (max-width: 767.98px) {
+    .desktop-table { display: none; }
+    .mobile-list { display: grid; gap: .75rem; }
   }
 </style>
 
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 text-text">
-  <div class="db-wrap">
+<div class="text-text">
+    <header class="page-head">
+        <div>
+            <h1 class="page-title">Admin</h1>
+            <p class="page-sub">Salud del sistema, analíticas de reproducción y enlaces muertos</p>
+        </div>
+        <div class="page-actions">
+            <button onclick="clearAnalytics()" class="btn-ui btn-ghost"><i class="fa-solid fa-chart-line"></i> Borrar analíticas</button>
+            <button onclick="clearCache()" class="btn-ui btn-danger"><i class="fa-solid fa-trash-can"></i> Vaciar caché</button>
+        </div>
+    </header>
 
-    <div class="db-card db-hero">
-      <div class="db-card-b" style="padding:1.25rem 1.25rem;">
-        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div>
-            <div class="flex flex-wrap items-center gap-2 mb-2">
-              <span class="pill"><span class="loading-dot"></span> Panel en vivo</span>
+    <div class="glass-card rounded-3xl p-5 mb-8" id="stats-container">
+        <div class="grid grid-cols-2 gap-6">
+            <div class="flex items-center gap-3 min-w-0">
+                <span class="metric-icon"><i class="fa-solid fa-memory"></i></span>
+                <div class="min-w-0"><p class="text-xl font-semibold tabular" id="stat-cache-size">-</p><p class="text-sm muted truncate">IDs en caché</p></div>
             </div>
-            <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-text">Admin Dashboard</h1>
-            <p class="db-sub mt-1.5 text-[15px]">Salud del sistema, actividad de streaming y mantenimiento de enlaces desde un solo lugar.</p>
-          </div>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full lg:w-auto">
-            <button onclick="clearCache()" class="btn-ui btn-danger"><i class="fas fa-trash-alt"></i> Limpiar caché</button>
-            <button onclick="clearAnalytics()" class="btn-ui"><i class="fas fa-chart-line"></i> Limpiar analíticas</button>
-          </div>
+            <div class="flex items-center gap-3 min-w-0">
+                <span class="metric-icon"><i class="fa-solid fa-robot"></i></span>
+                <div class="min-w-0"><p class="text-xl font-semibold tabular" id="stat-bot-count">-</p><p class="text-sm muted truncate">Bots conectados</p></div>
+            </div>
         </div>
-      </div>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="stats-container">
-      <div class="db-kpi">
-        <div class="flex items-start gap-4">
-          <div class="db-kpi-icon"><i class="fas fa-memory text-lg"></i></div>
-          <div class="min-w-0">
-            <p class="db-kpi-label">Cached File IDs</p>
-            <p class="db-kpi-value" id="stat-cache-size">-</p>
-            <p class="db-kpi-note">Entradas de caché de archivos en memoria.</p>
-          </div>
+    <div class="glass-card rounded-3xl overflow-hidden mb-8">
+        <div class="px-5 py-4 border-b border-border flex flex-wrap items-center justify-between gap-3">
+            <div>
+                <h2 class="section-title text-lg">Salud y diagnóstico</h2>
+                <p class="muted text-sm mt-1">Carga de bots en vivo, además de comprobaciones de base de datos, TMDB y URL pública.</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <span id="hz-overall-badge" class="hz-badge s-warning">comprobando…</span>
+                <button onclick="fetchHealthReport(true)" class="btn-ui btn-ghost"><i class="fa-solid fa-stethoscope"></i> Revisar</button>
+            </div>
         </div>
-      </div>
-      <div class="db-kpi">
-        <div class="flex items-start gap-4">
-          <div class="db-kpi-icon"><i class="fas fa-robot text-lg"></i></div>
-          <div class="min-w-0">
-            <p class="db-kpi-label">Connected Bots</p>
-            <p class="db-kpi-value" id="stat-bot-count">-</p>
-            <p class="db-kpi-note">Clientes de bot disponibles ahora mismo.</p>
-          </div>
+
+        <div class="p-4 sm:p-5">
+            <div id="hz-infra" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+                <div class="empty-state">Ejecutando comprobaciones…</div>
+            </div>
+            <h3 class="hz-subhead"><i class="fa-solid fa-robot"></i> Clientes de Telegram <span class="pill" style="margin-left:.35rem"><span class="loading-dot"></span> en vivo</span></h3>
+            <div id="stat-workloads">
+                <div class="empty-state">Cargando datos de bots...</div>
+            </div>
         </div>
-      </div>
     </div>
 
-    <div class="db-card">
-      <div class="db-card-h">
-        <div>
-          <h2 class="db-title">Salud y diagnóstico</h2>
-          <p class="db-sub">Carga de bots en vivo, estado de base de datos, TMDB y URL pública.</p>
+    <style>
+      .hz-badge { padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.72rem; font-weight: 500; white-space: nowrap; }
+      .s-ok { background: color-mix(in srgb, var(--ok) 13%, transparent); color: var(--ok); }
+      .s-degraded, .s-warning, .s-not_configured { background: color-mix(in srgb, var(--warn) 13%, transparent); color: var(--warn); }
+      .s-down, .s-error, .s-critical { background: color-mix(in srgb, var(--danger) 13%, transparent); color: var(--danger); }
+      .hz-card { border: 1px solid var(--border); background: var(--bg); border-radius: var(--radius-sm); padding: 1rem 1.1rem; }
+      .hz-top { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+      .hz-name { font-weight: 600; font-size: .92rem; display: flex; align-items: center; gap: .5rem; }
+      .hz-msg { color: var(--text-sec); font-size: .8rem; margin-top: .5rem; word-break: break-word; }
+      .hz-item { display: flex; align-items: center; justify-content: space-between; gap: .6rem; font-size: .82rem; border-top: 1px solid var(--hairline, color-mix(in srgb, var(--text) 6%, transparent)); padding-top: .45rem; margin-top: .45rem; }
+      .hz-item .lbl { display: flex; align-items: center; gap: .45rem; font-weight: 600; }
+      .hz-item .meta { color: var(--text-sec); font-size: .74rem; text-align: right; }
+      .hz-subhead { font-weight: 600; font-size: 0.95rem; margin: 0.25rem 0 0.85rem; display: flex; align-items: center; gap: .5rem; }
+      .mini-dot { width: .55rem; height: .55rem; border-radius: 999px; display: inline-block; }
+      .hz-usebar { height: 5px; border-radius: 999px; background: var(--hairline, color-mix(in srgb, var(--text) 12%, transparent)); overflow: hidden; width: 90px; margin-top: 3px; margin-left: auto; }
+      .hz-usebar > span { display: block; height: 100%; background: var(--primary); }
+      .bot-table-wrap { overflow-x: auto; }
+      .bot-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+      .bot-table th { text-align: center; font-size: 0.68rem; text-transform: uppercase; letter-spacing: .05em; color: var(--text-sec); padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--hairline, color-mix(in srgb, var(--text) 12%, transparent)); }
+      .bot-table th:first-child { text-align: left; }
+      .bot-table td { padding: 0.6rem 0.75rem; text-align: center; border-bottom: 1px solid var(--hairline, color-mix(in srgb, var(--text) 6%, transparent)); }
+      .bot-table tr:last-child td { border-bottom: none; }
+      .bot-table .bt-name { text-align: left; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; }
+      .ins-stat { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.9rem 1rem; text-align: center; }
+      .ins-v { font-size: 1.5rem; font-weight: 600; }
+      .ins-l { font-size: 0.8rem; color: var(--text-sec); margin-top: 0.2rem; }
+      .ins-col { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1rem; }
+      .ins-h { font-weight: 600; font-size: 0.95rem; margin-bottom: 0.85rem; }
+      .ins-list { display: flex; flex-direction: column; gap: 0.55rem; }
+      .ins-row { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; font-size: 0.85rem; }
+      .ins-row .name { color: var(--text); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .ins-row .val { color: var(--text-sec); font-size: 0.75rem; flex-shrink: 0; }
+      .ins-bar { height: 6px; border-radius: 999px; background: var(--primary); opacity: 0.75; margin-top: 3px; }
+      .ins-empty { color: var(--text-sec); font-size: 0.82rem; }
+    </style>
+
+    <div class="glass-card rounded-3xl overflow-hidden mb-8">
+        <div class="px-5 py-4 border-b border-border flex flex-wrap items-center justify-between gap-3">
+            <div>
+                <h2 class="section-title text-lg">Analíticas de reproducción</h2>
+                <p class="muted text-sm mt-1">Títulos más vistos, espectadores con más consumo y actividad diaria.</p>
+            </div>
+            <span class="pill">Resumen</span>
         </div>
-        <div class="flex items-center gap-2 flex-wrap">
-          <span id="hz-overall-badge" class="hz-badge s-warning">checking…</span>
-          <button onclick="fetchHealthReport(true)" class="btn-ui btn-ghost"><i class="fa-solid fa-stethoscope"></i> Recheck</button>
+        <div class="p-4 sm:p-5">
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+                <div class="ins-stat"><div class="ins-v" id="ins-total-streams">—</div><div class="ins-l">Reproducciones totales</div></div>
+                <div class="ins-stat"><div class="ins-v" id="ins-total-data">—</div><div class="ins-l">Datos transferidos</div></div>
+                <div class="ins-stat"><div class="ins-v" id="ins-avg-speed">—</div><div class="ins-l">Velocidad media</div></div>
+                <div class="ins-stat"><div class="ins-v" id="ins-active-users">—</div><div class="ins-l">Espectadores activos</div></div>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div class="ins-col"><h3 class="ins-h"><i class="fa-solid fa-fire text-primary mr-2"></i>Títulos más vistos</h3><div id="ins-top-titles" class="ins-list"></div></div>
+                <div class="ins-col"><h3 class="ins-h"><i class="fa-solid fa-user text-primary mr-2"></i>Espectadores principales</h3><div id="ins-top-users" class="ins-list"></div></div>
+                <div class="ins-col"><h3 class="ins-h"><i class="fa-solid fa-calendar-days text-primary mr-2"></i>Últimos 14 días</h3><div id="ins-per-day" class="ins-list"></div></div>
+            </div>
         </div>
-      </div>
-      <div class="db-card-b">
-        <div id="hz-infra" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
-          <div class="empty-state">Ejecutando comprobaciones…</div>
-        </div>
-        <h3 class="hz-subhead"><i class="fa-solid fa-robot"></i> Clientes de Telegram <span class="pill" style="margin-left:.25rem"><span class="loading-dot"></span> live</span></h3>
-        <div id="stat-workloads"><div class="empty-state">Cargando datos de bots…</div></div>
-      </div>
     </div>
 
-    <div class="db-card">
-      <div class="db-card-h">
-        <div>
-          <h2 class="db-title">Streaming Insights</h2>
-          <p class="db-sub">Títulos más vistos, espectadores y actividad reciente.</p>
+    <div class="glass-card rounded-3xl overflow-hidden mb-8">
+        <div class="px-5 py-4 border-b border-border flex flex-wrap items-center justify-between gap-3">
+            <div>
+                <h2 class="section-title text-lg">Analíticas recientes</h2>
+                <p class="muted text-sm mt-1">Datos transferidos, velocidad, duración y estado de las reproducciones recientes.</p>
+            </div>
+            <span class="pill">Actividad reciente</span>
         </div>
-        <span class="pill">Resumen</span>
-      </div>
-      <div class="db-card-b">
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-          <div class="ins-stat"><div class="ins-v" id="ins-total-elementos">—</div><div class="ins-l">Streams</div></div>
-          <div class="ins-stat"><div class="ins-v" id="ins-total-data">—</div><div class="ins-l">Transferido</div></div>
-          <div class="ins-stat"><div class="ins-v" id="ins-avg-speed">—</div><div class="ins-l">Vel. media</div></div>
-          <div class="ins-stat"><div class="ins-v" id="ins-active-users">—</div><div class="ins-l">Espectadores</div></div>
+
+        <div class="p-4 sm:p-5">
+            <div class="desktop-table table-shell">
+                <div class="table-scroll">
+                    <table class="table-ui">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Título</th>
+                                <th class="text-center">Bot (DC)</th>
+                                <th class="text-right">Transferido</th>
+                                <th class="text-right">Media / Pico</th>
+                                <th class="text-center">Duración</th>
+                                <th class="text-center">Estado</th>
+                                <th class="text-right">Hora</th>
+                            </tr>
+                        </thead>
+                        <tbody id="analytics-tbody">
+                            <tr>
+                                <td colspan="8" class="empty-state">
+                                    <i class="fas fa-spinner fa-spin mr-2 text-primary"></i> Cargando analíticas...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="analytics-mobile" class="mobile-list scroll-cap">
+                <div class="empty-state">
+                    <i class="fas fa-spinner fa-spin mr-2 text-primary"></i> Cargando analíticas...
+                </div>
+            </div>
         </div>
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div class="ins-col"><h3 class="ins-h">🔥 Títulos destacados</h3><div id="ins-top-titles" class="ins-list"></div></div>
-          <div class="ins-col"><h3 class="ins-h">👤 Top espectadores</h3><div id="ins-top-users" class="ins-list"></div></div>
-          <div class="ins-col"><h3 class="ins-h">📅 Últimos 14 días</h3><div id="ins-per-day" class="ins-list"></div></div>
-        </div>
-      </div>
     </div>
 
-    <div class="db-card">
-      <div class="db-card-h">
-        <div>
-          <h2 class="db-title">Actividad reciente</h2>
-          <p class="db-sub">Transferencia, velocidad, duración y estado de reproducciones.</p>
+    <div class="glass-card rounded-3xl overflow-hidden">
+        <div class="px-5 py-4 border-b border-border flex flex-wrap items-center justify-between gap-3">
+            <div>
+                <h2 class="section-title text-lg">Enlaces muertos detectados</h2>
+                <p class="muted text-sm mt-1">Elimina calidades rotas para que los usuarios no vean contenido muerto.</p>
+            </div>
+            <span class="pill">Limpieza de base de datos</span>
         </div>
-        <span class="pill">Actividad</span>
-      </div>
-      <div class="db-card-b">
-        <div class="desktop-table table-shell">
-          <div class="table-scroll" tabindex="0" role="region" aria-label="Recent playback activity">
-            <table class="table-ui">
-              <thead>
-                <tr>
-                  <th scope="col">Stream ID</th>
-                  <th scope="col">Título</th>
-                  <th scope="col" style="text-align:center">Bot (DC)</th>
-                  <th scope="col" style="text-align:right">Transferido</th>
-                  <th scope="col" style="text-align:right">Media / Pico</th>
-                  <th scope="col" style="text-align:center">Duración</th>
-                  <th scope="col" style="text-align:center">Estado</th>
-                  <th scope="col" style="text-align:right">Hora</th>
-                </tr>
-              </thead>
-              <tbody id="analytics-tbody">
-                <tr><td colspan="8" class="empty-state"><i class="fas fa-spinner fa-spin mr-2"></i> Cargando analíticas…</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-        <div id="analytics-mobile" class="mobile-list scroll-cap">
-          <div class="empty-state"><i class="fas fa-spinner fa-spin mr-2"></i> Cargando analíticas…</div>
-        </div>
-      </div>
-    </div>
 
-    <div class="db-card">
-      <div class="db-card-h">
-        <div>
-          <h2 class="db-title">Enlaces caídos</h2>
-          <p class="db-sub">Calidades marcadas como no disponibles para limpiar del catálogo.</p>
-        </div>
-        <span class="pill">Mantenimiento</span>
-      </div>
-      <div class="db-card-b">
-        <div class="desktop-table table-shell">
-          <div class="table-scroll" tabindex="0" role="region" aria-label="Dead links">
-            <table class="table-ui">
-              <thead>
-                <tr>
-                  <th scope="col">Título</th>
-                  <th scope="col">Tipo</th>
-                  <th scope="col">Calidad</th>
-                  <th scope="col" style="text-align:center">Fecha</th>
-                  <th scope="col" style="text-align:center">Acción</th>
-                </tr>
-              </thead>
-              <tbody id="dead-links-tbody">
-                <tr><td colspan="5" class="empty-state"><i class="fas fa-spinner fa-spin mr-2"></i> Cargando enlaces caídos…</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-        <div id="dead-links-mobile" class="mobile-list scroll-cap">
-          <div class="empty-state"><i class="fas fa-spinner fa-spin mr-2"></i> Cargando enlaces caídos…</div>
-        </div>
-      </div>
-    </div>
+        <div class="p-4 sm:p-5">
+            <div class="desktop-table table-shell">
+                <div class="table-scroll">
+                    <table class="table-ui">
+                        <thead>
+                            <tr>
+                                <th>Título</th>
+                                <th>Tipo</th>
+                                <th>Detalles de calidad</th>
+                                <th class="text-center">Fecha añadido</th>
+                                <th class="text-center">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dead-links-tbody">
+                            <tr>
+                                <td colspan="5" class="empty-state">
+                                    <i class="fas fa-spinner fa-spin mr-2 text-primary"></i> Cargando enlaces muertos...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
 
-  </div>
+            <div id="dead-links-mobile" class="mobile-list scroll-cap">
+                <div class="empty-state">
+                    <i class="fas fa-spinner fa-spin mr-2 text-primary"></i> Cargando enlaces muertos...
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -317,7 +278,7 @@
                     const idx = Number(b.client_index);
                     const name = idx < 0 ? 'Userbot' : ('Bot ' + (idx + 1));
                     const dc = (b.dc ?? b.dc_id);
-                    const color = b.status === 'healthy' ? '#22c55e' : (b.status === 'degraded' ? '#f59e0b' : '#ef4444');
+                    const color = b.status === 'healthy' ? 'var(--ok)' : (b.status === 'degraded' ? 'var(--warn)' : 'var(--danger)');
                     return `<tr>
                         <td class="bt-name"><span class="mini-dot" style="background:${color}"></span> ${escapeHtml(name)}</td>
                         <td>${dc != null ? 'DC ' + escapeHtml(dc) : '—'}</td>
@@ -326,19 +287,19 @@
                     </tr>`;
                 }).join('');
                 workloadsWrap.innerHTML = `<div class="bot-table-wrap"><table class="bot-table">
-                    <thead><tr><th>Cliente</th><th>DC</th><th>Carga</th><th>MB/s medio</th></tr></thead>
+                    <thead><tr><th>Cliente</th><th>DC</th><th>Carga</th><th>Media MB/s</th></tr></thead>
                     <tbody>${rows}</tbody></table></div>`;
             } else {
-                workloadsWrap.innerHTML = '<div class="empty-state">No hay datos de bots disponibles.</div>';
+                workloadsWrap.innerHTML = '<div class="empty-state">No hay datos de bots</div>';
             }
         } catch (err) {
             console.error(err);
-            showToast('Failed to load system stats.', 'error', 'Load Error');
+            showToast('No se pudieron cargar las estadísticas del sistema.', 'error', 'Error de carga');
         }
     }
 
     function hzBadge(status) { return `<span class="hz-badge s-${status}">${escapeHtml(String(status).replace('_', ' '))}</span>`; }
-    function hzMini(ok) { return `<span class="mini-dot" style="background:${ok ? '#22c55e' : '#ef4444'}"></span>`; }
+    function hzMini(ok) { return `<span class="mini-dot" style="background:${ok ? 'var(--ok)' : 'var(--danger)'}"></span>`; }
 
     function hzInfraCard(sec) {
         const icon = { databases: 'fa-database', tmdb: 'fa-film', base_url: 'fa-link' }[sec.key] || 'fa-circle-check';
@@ -349,7 +310,7 @@
                     <div class="lbl">${hzMini(i.status === 'ok')} ${escapeHtml(i.name)}</div>
                     <div class="meta">${i.status === 'ok'
                         ? `${escapeHtml(i.size_mb)} MB<div class="hz-usebar"><span style="width:${Math.min(100, i.usage_pct || 0)}%"></span></div>`
-                        : escapeHtml(i.message || 'unreachable')}</div>
+                        : escapeHtml(i.message || 'inaccesible')}</div>
                 </div>`).join('') || '<div class="hz-msg">Sin bases de datos.</div>';
         } else {
             body = `<div class="hz-msg">${escapeHtml(sec.message || '')}${sec.url ? '<br><span style="opacity:.7">' + escapeHtml(sec.url) + '</span>' : ''}</div>`;
@@ -367,12 +328,12 @@
             if (data.status !== 'success') return;
             const d = data.data || {};
             const overall = d.overall || 'warning';
-            const label = { ok: 'Healthy', warning: 'Attention', critical: 'Critical' }[overall] || overall;
+            const label = { ok: 'Correcto', warning: 'Atención', critical: 'Crítico' }[overall] || overall;
             const badge = document.getElementById('hz-overall-badge');
             if (badge) { badge.className = 'hz-badge s-' + overall; badge.textContent = label; }
             const infra = (d.sections || []).filter(s => s.key !== 'bots');
             document.getElementById('hz-infra').innerHTML = infra.map(hzInfraCard).join('');
-            if (force) showToast('Health re-checked.', 'success', 'Health');
+            if (force) showToast('Salud comprobada de nuevo.', 'success', 'Salud');
         } catch (e) { /* ignore transient errors */ }
     }
 
@@ -399,27 +360,27 @@
 
     function renderInsights(d) {
         const s = d.summary || {};
-        insText('ins-total-elementos', s.total_elementos ?? s.total_streams ?? 0);
+        insText('ins-total-streams', s.total_streams ?? 0);
         insText('ins-total-data', fmtBytes(s.total_bytes));
         insText('ins-avg-speed', (Number(s.avg_speed || 0)).toFixed(1) + ' MB/s');
         insText('ins-active-users', s.active_users ?? 0);
 
         const titles = d.top_titles || [];
-        const maxT = Math.max(1, ...titles.map(t => (t.elementos ?? t.streams) || 0));
+        const maxT = Math.max(1, ...titles.map(t => t.streams || 0));
         document.getElementById('ins-top-titles').innerHTML = titles.length
-            ? titles.map(t => { const plays = t.elementos ?? t.streams ?? 0; return insRow(t.title || '—', `${plays} plays · ${fmtBytes(t.total_bytes)}`, plays / maxT); }).join('')
+            ? titles.map(t => insRow(t.title || '—', `${t.streams} reproducciones · ${fmtBytes(t.total_bytes)}`, t.streams / maxT)).join('')
             : '<div class="ins-empty">Sin datos todavía.</div>';
 
         const users = d.top_users || [];
         const maxU = Math.max(1, ...users.map(u => u.total_bytes || 0));
         document.getElementById('ins-top-users').innerHTML = users.length
-            ? users.map(u => { const plays = u.elementos ?? u.streams ?? 0; return insRow(u.user || '—', `${fmtBytes(u.total_bytes)} · ${plays} streams`, u.total_bytes / maxU); }).join('')
+            ? users.map(u => insRow(u.user || '—', `${fmtBytes(u.total_bytes)} · ${u.streams} reproducciones`, u.total_bytes / maxU)).join('')
             : '<div class="ins-empty">Sin datos todavía.</div>';
 
         const days = d.per_day || [];
-        const maxD = Math.max(1, ...days.map(x => (x.elementos ?? x.streams) || 0));
+        const maxD = Math.max(1, ...days.map(x => x.streams || 0));
         document.getElementById('ins-per-day').innerHTML = days.length
-            ? days.map(x => { const plays = x.elementos ?? x.streams ?? 0; return insRow(x.date, `${plays} · ${fmtBytes(x.total_bytes)}`, plays / maxD); }).join('')
+            ? days.map(x => insRow(x.date, `${x.streams} · ${fmtBytes(x.total_bytes)}`, x.streams / maxD)).join('')
             : '<div class="ins-empty">Sin datos todavía.</div>';
     }
 
@@ -430,24 +391,24 @@
             const mobile = document.getElementById('analytics-mobile');
 
             if (!res.ok) {
-                showToast('Failed to load elemento analytics.', 'error', 'Load Error');
+                showToast('No se pudieron cargar las analíticas.', 'error', 'Error de carga');
                 return;
             }
 
             const data = await res.json();
             renderInsights(data.data || {});
-            const elementos = data?.data?.recent || [];
+            const streams = data?.data?.recent || [];
 
-            if (!elementos.length) {
-                tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No hay reproducciones recientes.</td></tr>';
-                mobile.innerHTML = '<div class="empty-state">No hay reproducciones recientes.</div>';
+            if (!streams.length) {
+                tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No hay reproducciones recientes registradas.</td></tr>';
+                mobile.innerHTML = '<div class="empty-state">No hay reproducciones recientes registradas.</div>';
                 return;
             }
 
             let tableHtml = '';
             let mobileHtml = '';
 
-            elementos.forEach(s => {
+            streams.forEach(s => {
                 const avg = Number(s.avg_mbps ?? 0);
                 const peak = Number(s.peak_mbps ?? 0);
                 const bytesStr = ((Number(s.total_bytes ?? 0)) / (1024 * 1024)).toFixed(1) + ' MB';
@@ -463,14 +424,14 @@
 
                 tableHtml += `
                     <tr>
-                        <td><span class="elemento-id muted font-mono text-xs" title="${escapeHtml(s.elemento_id || s.stream_id)}">${escapeHtml(s.elemento_id || s.stream_id || '—')}</span></td>
+                        <td><span class="stream-id muted font-mono text-xs" title="${escapeHtml(s.stream_id)}">${escapeHtml(s.stream_id)}</span></td>
                         <td><div class="title-cell font-semibold" title="${escapeHtml(titleStr)}">${escapeHtml(titleStr)}</div></td>
-                        <td style="text-align:center">Bot ${Number(s.client_index ?? 0) + 1} <span class="muted text-xs">(DC${escapeHtml(s.dc_id)})</span></td>
-                        <td style="text-align:right;font-weight:600">${bytesStr}</td>
-                        <td style="text-align:right;font-weight:600">${avg.toFixed(1)} <span class="muted">/ ${peak.toFixed(1)} MB/s</span></td>
-                        <td style="text-align:center" class="muted">${durationStr}</td>
-                        <td style="text-align:center"><span class="${getStatusBadge(status)}">${escapeHtml(status)}</span></td>
-                        <td style="text-align:right" class="muted text-xs">${timeStr}</td>
+                        <td class="text-center">Bot ${Number(s.client_index ?? 0) + 1} <span class="muted text-xs ml-1">(DC${escapeHtml(s.dc_id)})</span></td>
+                        <td class="text-right font-semibold">${bytesStr}</td>
+                        <td class="text-right font-semibold">${avg.toFixed(1)} <span class="muted">/ ${peak.toFixed(1)} MB/s</span></td>
+                        <td class="text-center muted">${durationStr}</td>
+                        <td class="text-center"><span class="${getStatusBadge(status)}">${escapeHtml(status)}</span></td>
+                        <td class="text-right muted text-xs">${timeStr}</td>
                     </tr>
                 `;
 
@@ -495,7 +456,7 @@
             mobile.innerHTML = mobileHtml;
         } catch (err) {
             console.error(err);
-            showToast('Failed to load elemento analytics.', 'error', 'Load Error');
+            showToast('No se pudieron cargar las analíticas.', 'error', 'Error de carga');
         }
     }
 
@@ -506,7 +467,7 @@
             const mobile = document.getElementById('dead-links-mobile');
 
             if (!res.ok) {
-                showToast('Failed to load dead links.', 'error', 'Load Error');
+                showToast('No se pudieron cargar los enlaces muertos.', 'error', 'Error de carga');
                 return;
             }
 
@@ -514,8 +475,8 @@
             const links = data?.data || [];
 
             if (!links.length) {
-                tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No hay enlaces caídos. ¡Todo en buen estado!</td></tr>';
-                mobile.innerHTML = '<div class="empty-state">No hay enlaces caídos. ¡Todo en buen estado!</div>';
+                tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No se encontraron enlaces muertos. ¡Todos los archivos están bien!</td></tr>';
+                mobile.innerHTML = '<div class="empty-state">No se encontraron enlaces muertos. ¡Todos los archivos están bien!</div>';
                 return;
             }
 
@@ -525,8 +486,8 @@
             links.forEach(l => {
                 const isMovie = l.type === 'movie';
                 const typeBadge = isMovie
-                    ? '<span class="status-badge status-good">Movie</span>'
-                    : '<span class="status-badge status-warn">TV Series</span>';
+                    ? '<span class="status-badge status-good">Película</span>'
+                    : '<span class="status-badge status-warn">Serie</span>';
 
                 const dateAdded = l.date_added ? new Date(l.date_added).toLocaleDateString() : '—';
                 const qualityIdEsc = String(l.quality_id || '').replace(/'/g, "\\'");
@@ -539,15 +500,16 @@
                         </td>
                         <td>${typeBadge}</td>
                         <td>
-                            <div class="font-semibold" style="color:#ef4444">${escapeHtml(l.quality || 'Unknown')}</div>
-                            <div class="muted text-xs mt-1">${escapeHtml(l.size || 'Unknown size')}</div>
+                            <div class="font-semibold text-red-400">${escapeHtml(l.quality || 'Desconocida')}</div>
+                            <div class="muted text-xs mt-1">${escapeHtml(l.size || 'Tamaño desconocido')}</div>
                         </td>
-                        <td style="text-align:center" class="muted text-xs">${dateAdded}</td>
-                        <td style="text-align:center">
+                        <td class="text-center muted text-xs">${dateAdded}</td>
+                        <td class="text-center">
                             <button onclick="deleteDeadLink(${l.tmdb_id}, ${l.db_index}, '${escapeHtml(l.type)}', '${qualityIdEsc}', ${l.season || -1}, ${l.episode || -1})"
-                                    class="btn-ui btn-danger" style="padding:.45rem .75rem;min-height:40px;width:auto"
-                                    title="Delete from Database">
-                                <i class="fas fa-trash"></i> Borrar
+                                    class="btn-ui btn-danger px-3 py-2 text-sm w-auto"
+                                    title="Eliminar de la base de datos">
+                                <i class="fas fa-trash"></i>
+                                Eliminar
                             </button>
                         </td>
                     </tr>
@@ -557,19 +519,22 @@
                     <div class="mobile-card">
                         <div class="flex items-start justify-between gap-3 mb-3">
                             <div>
-                                <div class="font-bold text-text">${escapeHtml(l.title)}</div>
+                                <div class="font-semibold text-text">${escapeHtml(l.title)}</div>
                                 <div class="muted text-xs mt-1">${escapeHtml(l.year || '')}</div>
                             </div>
                             ${typeBadge}
                         </div>
+
                         <div class="mobile-kv mb-4">
-                            <div class="key">Calidad</div><div style="color:#ef4444;font-weight:600">${escapeHtml(l.quality || 'Unknown')}</div>
-                            <div class="key">Tamaño</div><div>${escapeHtml(l.size || 'Unknown size')}</div>
-                            <div class="key">Fecha</div><div>${dateAdded}</div>
+                            <div class="key">Calidad</div><div class="text-red-400 font-semibold">${escapeHtml(l.quality || 'Desconocida')}</div>
+                            <div class="key">Tamaño</div><div>${escapeHtml(l.size || 'Tamaño desconocido')}</div>
+                            <div class="key">Fecha añadido</div><div>${dateAdded}</div>
                         </div>
+
                         <button onclick="deleteDeadLink(${l.tmdb_id}, ${l.db_index}, '${escapeHtml(l.type)}', '${qualityIdEsc}', ${l.season || -1}, ${l.episode || -1})"
-                                class="btn-ui btn-danger" style="width:100%">
-                            <i class="fas fa-trash"></i> Eliminar enlace
+                                class="btn-ui btn-danger">
+                            <i class="fas fa-trash"></i>
+                            Eliminar enlace muerto
                         </button>
                     </div>
                 `;
@@ -579,47 +544,47 @@
             mobile.innerHTML = mobileHtml;
         } catch (err) {
             console.error(err);
-            showToast('Failed to load dead links.', 'error', 'Load Error');
+            showToast('No se pudieron cargar los enlaces muertos.', 'error', 'Error de carga');
         }
     }
 
     async function clearCache() {
-        if (!confirm("Are you sure you want to clear the Telegram FileId cache? This will force bots to re-fetch metadata on the next elemento.")) return;
+        if (!confirm("¿Seguro que quieres vaciar la caché de FileId de Telegram? Los bots volverán a obtener los metadatos en la próxima reproducción.")) return;
 
         try {
             const res = await fetch('/api/admin/clear-cache', { method: 'POST' });
             if (res.ok) {
                 const data = await res.json();
-                showToast(data.message || 'Cache cleared successfully.', 'success', 'Cache Cleared');
+                showToast(data.message || 'Caché vaciada correctamente.', 'success', 'Caché vaciada');
                 fetchStats();
             } else {
-                showToast('Failed to clear cache.', 'error', 'Request Failed');
+                showToast('No se pudo vaciar la caché.', 'error', 'Solicitud fallida');
             }
         } catch (err) {
-            showToast('Error clearing cache.', 'error', 'Network Error');
+            showToast('Error al vaciar la caché.', 'error', 'Error de red');
         }
     }
 
     async function clearAnalytics() {
-        if (!confirm("Are you sure you want to clear all elemento analytics history? This cannot be undone.")) return;
+        if (!confirm("¿Seguro que quieres borrar todo el historial de analíticas? No se puede deshacer.")) return;
 
         try {
             const res = await fetch('/api/admin/clear-analytics', { method: 'POST' });
             if (res.ok) {
                 const data = await res.json();
-                showToast(data.message || 'Analytics cleared successfully.', 'success', 'Analytics Cleared');
+                showToast(data.message || 'Analíticas borradas correctamente.', 'success', 'Analíticas borradas');
                 fetchAnalytics();
             } else {
                 const err = await res.json().catch(() => ({}));
-                showToast(err.detail || 'Failed to clear analytics.', 'error', 'Request Failed');
+                showToast(err.detail || 'No se pudieron borrar las analíticas.', 'error', 'Solicitud fallida');
             }
         } catch (err) {
-            showToast('Error clearing analytics.', 'error', 'Network Error');
+            showToast('Error al borrar las analíticas.', 'error', 'Error de red');
         }
     }
 
     async function deleteDeadLink(tmdb_id, db_index, type, quality_id, season, episode) {
-        if (!confirm("Are you sure you want to purge this dead link from the database? Users will no longer see this quality in la app.")) return;
+        if (!confirm("¿Seguro que quieres eliminar este enlace muerto de la base de datos? Los usuarios ya no verán esta calidad en Stremio.")) return;
 
         try {
             let endpoint = '';
@@ -631,13 +596,13 @@
 
             const res = await fetch(endpoint, { method: 'DELETE' });
             if (res.ok) {
-                showToast('Dead link deleted successfully.', 'success', 'Cleanup Complete');
+                showToast('Enlace muerto eliminado correctamente.', 'success', 'Limpieza completada');
                 fetchDeadLinks();
             } else {
-                showToast('Failed to delete the dead link.', 'error', 'Delete Failed');
+                showToast('No se pudo eliminar el enlace muerto.', 'error', 'Error al eliminar');
             }
         } catch (err) {
-            showToast('Error communicating with server.', 'error', 'Network Error');
+            showToast('Error de comunicación con el servidor.', 'error', 'Error de red');
         }
     }
 
@@ -646,8 +611,8 @@
         fetchHealthReport();
         fetchAnalytics();
         fetchDeadLinks();
-        setInterval(fetchStats, 5000);
-        setInterval(fetchHealthReport, 20000);
+        setInterval(fetchStats, 5000);          // realtime bot load
+        setInterval(fetchHealthReport, 20000);  // infra checks (cached server-side)
         setInterval(fetchAnalytics, 15000);
     });
 </script>
