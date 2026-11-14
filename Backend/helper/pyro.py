@@ -208,13 +208,56 @@ def get_readable_file_size(size_in_bytes):
     return f'{size_in_bytes:.2f}{SIZE_UNITS[index]}' if index > 0 else f'{size_in_bytes:.0f}B'
 
 
+_HASHTAG_PATTERN = re.compile(r"#[\w\-]+", re.UNICODE)
+_RELEASE_NOISE_RE = re.compile(
+    r"(?im)^\s*(subtitulad[oa]s?|subtitulado|sub\.?|doblad[oa]s?|dual(?:\s*audio)?|latino|castellano|español|ingles|english|espanol|hd|full\s*hd|4k|webrip|bluray|bdrip|hdrip|estreno)\s*$"
+)
+
+def _pick_primary_title_line(text: str) -> str:
+    if not text:
+        return ""
+    raw = text.replace("\r\n", "\n").replace("\r", "\n")
+    lines = [ln.strip() for ln in raw.split("\n")]
+    # drop empty, pure hashtag/noise lines
+    cleaned_lines = []
+    for ln in lines:
+        if not ln:
+            continue
+        ln2 = _HASHTAG_PATTERN.sub(" ", ln)
+        ln2 = re.sub(r"\s+", " ", ln2).strip(" -|•·")
+        if not ln2:
+            continue
+        if _RELEASE_NOISE_RE.match(ln2):
+            continue
+        # skip lines that are only hashtags/punctuation originally
+        if re.fullmatch(r"[\W_#]+", ln):
+            continue
+        cleaned_lines.append(ln2)
+    if not cleaned_lines:
+        return text
+    # prefer first line that contains a year in parentheses/brackets or 4-digit year token
+    year_re = re.compile(r"(?:\(|\[)?\b(19|20)\d{2}\b(?:\)|\])?")
+    for ln in cleaned_lines:
+        if year_re.search(ln):
+            return ln
+    return cleaned_lines[0]
+
 def remove_urls(text):
     if not text:
         return ""
 
+    # For multi-line captions, pick the primary title line first (e.g. "Movie (2026)" above alt title/tags)
+    if "\n" in text or "\r" in text:
+        text = _pick_primary_title_line(text)
+
     url_pattern = r'\b(?:(?:https?|ftp):\/\/|www\.)[^\s/$.?#].[^\s]*'
     text = re.sub(r'\n\s*(?:IMDB|TMDB)\s*$', '', text, flags=re.I)
+    # remove markdown/html-like links text noise
+    text = re.sub(r'https?://\S+', '', text)
     text_without_urls = re.sub(url_pattern, '', text)
+    # remove hashtags and common noise words inline
+    text_without_urls = _HASHTAG_PATTERN.sub(" ", text_without_urls)
+    text_without_urls = re.sub(r"(?i)\b(subtitulad[oa]s?|subtitulado|doblad[oa]s?)\b", " ", text_without_urls)
     cleaned_text = re.sub(r'\s+', ' ', text_without_urls).strip()
 
     return cleaned_text
@@ -223,18 +266,18 @@ def clean_filename(filename: str) -> str:
     if not filename:
         return "unknown_file"
 
-    #----- 1 – Strip URLs that captions sometimes prepend
+    #----- 1 – Strip URLs that captions sometimes prepend / pick primary title from multi-line captions
     filename = remove_urls(filename)
-    
+
     #----- 2 – Remove emoji sequences
     filename = _EMOJI_PATTERN.sub(" ", filename)
 
     #----- 3 – Remove decorative unicode symbols
     filename = _DECORATION_PATTERN.sub(" ", filename)
 
-    #----- 4 – Replace any remaining non-ASCII characters with a space.
-    #----- Keep standard filename-safe characters: alphanumerics, . - _ ( ) [ ] ' " , : ! ? & + @
-    filename = re.sub(r"[^\x20-\x7E]", " ", filename)
+    #----- 4 – Remove hashtags and unwanted symbols but KEEP unicode letters (accents) for multilingual titles
+    filename = _HASHTAG_PATTERN.sub(" ", filename)
+    filename = re.sub(r"[^\w\s\.\-\_\(\)\[\]'\",:!?&+]", " ", filename, flags=re.UNICODE)
 
     #----- 5 – Remove Telegram channel tags  (@ChannelName_ etc.)
     filename = _CHANNEL_TAG_PATTERN.sub("", filename)
