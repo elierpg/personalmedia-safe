@@ -508,8 +508,10 @@
             Se guarda cifrada de forma segura y habilita la Búsqueda global.
         </p>
 
-        <div id="sess-loading" style="color:var(--text-sec);font-size:0.85rem">
-            <i class="fa-solid fa-spinner fa-spin"></i> Comprobando sesión…
+        <div id="sess-loading" style="color:var(--text-sec);font-size:0.85rem;display:flex;align-items:center;gap:.6rem;flex-wrap:wrap">
+            <span id="sess-loading-msg"><i class="fa-solid fa-spinner fa-spin"></i> Comprobando sesión…</span>
+            <button type="button" class="sess-btn" id="sess-retry-btn" onclick="sessLoadStatus(true)" style="display:none;padding:.35rem .7rem;font-size:.78rem"><i class="fa-solid fa-rotate"></i> Reintentar</button>
+            <button type="button" class="sess-btn primary" id="sess-start-login-btn" onclick="sessShowLogin()" style="display:none;padding:.35rem .7rem;font-size:.78rem"><i class="fa-solid fa-right-to-bracket"></i> Iniciar sesión</button>
         </div>
 
         <!-- Connected view -->
@@ -1616,13 +1618,27 @@ async function restartApp() {
 /* ── Telegram User Session ─────────────────────────────────────────────── */
 let sessLoginId = null;
 
-async function sessLoadStatus() {
+async function sessLoadStatus(manual) {
     const loading = document.getElementById('sess-loading');
+    const loadingMsg = document.getElementById('sess-loading-msg');
     const connected = document.getElementById('sess-connected');
     const login = document.getElementById('sess-login');
+    const retryBtn = document.getElementById('sess-retry-btn');
+    const startBtn = document.getElementById('sess-start-login-btn');
     if (!loading) return;
+    loading.style.display = 'flex';
+    if (loadingMsg) loadingMsg.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Comprobando sesión…';
+    if (retryBtn) retryBtn.style.display = 'none';
+    if (startBtn) startBtn.style.display = 'none';
+    if (connected) connected.style.display = 'none';
+    if (login) login.style.display = 'none';
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
     try {
-        const res = await fetch('/api/admin/settings/session');
+        const res = await fetch('/api/admin/settings/session', { signal: controller.signal, credentials: 'same-origin' });
+        clearTimeout(timer);
+        if (!res.ok) throw new Error('Estado no disponible (' + res.status + ')');
         const data = await res.json();
         loading.style.display = 'none';
         if (data.connected && data.profile) {
@@ -1636,15 +1652,41 @@ async function sessLoadStatus() {
             live.textContent = data.live ? 'Conectada' : 'Guardada (reinicia para activar)';
             connected.style.display = '';
             login.style.display = 'none';
+        } else if (data.connected) {
+            const p = data.profile || {};
+            document.getElementById('sess-name').textContent = p.name || 'Sesión guardada';
+            document.getElementById('sess-username').textContent = p.username ? '@' + p.username : 'Perfil no disponible';
+            document.getElementById('sess-phone').textContent = p.phone || '—';
+            document.getElementById('sess-id').textContent = p.user_id || '—';
+            const live = document.getElementById('sess-live');
+            live.className = 'sess-pill ' + (data.live ? 'on' : 'off');
+            live.textContent = data.live ? 'Conectada' : 'Guardada (reinicia para activar)';
+            connected.style.display = '';
+            login.style.display = 'none';
         } else {
-            connected.style.display = 'none';
-            login.style.display = '';
-            sessShowStep('phone');
+            sessShowLogin();
         }
     } catch (e) {
-        loading.textContent = 'No se pudo cargar el estado de la sesión.';
+        clearTimeout(timer);
+        if (loadingMsg) loadingMsg.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> No se pudo comprobar la sesión.';
+        if (retryBtn) retryBtn.style.display = '';
+        if (startBtn) startBtn.style.display = '';
+        // keep loading bar visible with actions; also allow login directly
     }
 }
+
+function sessShowLogin() {
+    const loading = document.getElementById('sess-loading');
+    const connected = document.getElementById('sess-connected');
+    const login = document.getElementById('sess-login');
+    if (loading) loading.style.display = 'none';
+    if (connected) connected.style.display = 'none';
+    if (login) login.style.display = '';
+    sessShowStep('phone');
+    const msg = document.getElementById('sess-msg');
+    if (msg) msg.style.display = 'none';
+}
+
 
 function sessShowStep(step) {
     document.getElementById('sess-step-phone').style.display = step === 'phone' ? '' : 'none';
