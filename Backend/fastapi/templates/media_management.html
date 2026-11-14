@@ -636,7 +636,7 @@
                             <label class="ma-label">Calidad *</label>
                             <select id="ma-quality" class="ma-input">
                                 <option value="">Seleccionar</option>
-                                <option>480p</option><option>720p</option><option selected>1080p</option>
+                                <option>480p</option><option>720p</option><option>1080p</option>
                                 <option>2160p</option><option value="__custom">Personalizada…</option>
                             </select>
                         </div>
@@ -984,7 +984,7 @@
                 if (g.season != null && !document.getElementById('ma-season').value) document.getElementById('ma-season').value = g.season;
                 if (g.episode != null && !document.getElementById('ma-episode').value) document.getElementById('ma-episode').value = g.episode;
             }
-            const q = gq || maQuality() || '1080p';
+            const q = gq || maQuality() || '';
             maSelectedSkipItems.push({ item: it, quality: q, season: g.season, episode: g.episode });
         }
         maRenderSelectedSkipItems();
@@ -1035,7 +1035,8 @@
         const skipPicker = document.getElementById('ma-skip-picker'); if (skipPicker) skipPicker.classList.add('hidden');
         const linkSrc = document.getElementById('ma-link-source'); if (linkSrc) linkSrc.classList.remove('hidden');
         maResetParts();
-        document.getElementById('ma-quality').value = '1080p';
+        document.getElementById('ma-quality').value = '';
+        document.getElementById('ma-quality-custom').value = '';
         document.getElementById('ma-quality-custom').classList.add('hidden');
         document.getElementById('ma-resolve-state').classList.add('hidden');
         document.getElementById('ma-search-state').classList.add('hidden');
@@ -1115,7 +1116,8 @@
         const hasSkip = maSelectedSkipItems.length > 0;
         if (!title) { showToast('Introduce un título.', 'error', 'Error'); return; }
         if (!hasSkip && !parts.length) { showToast('Selecciona uno o más archivos del canal de skip o pega al menos un enlace de Telegram.', 'error', 'Error'); return; }
-        if (!quality && !(hasSkip && maSelectedSkipItems.length > 1)) { showToast('Selecciona una calidad.', 'error', 'Error'); return; }
+        const effectiveQuality = quality || (hasSkip && maSelectedSkipItems[0] ? (maSelectedSkipItems[0].quality || maGuessQuality((maSelectedSkipItems[0].item.file_name || maSelectedSkipItems[0].item.caption || ''))) : '');
+        if (!effectiveQuality && !(hasSkip && maSelectedSkipItems.length > 1)) { showToast('Selecciona o detecta una calidad para el archivo.', 'error', 'Error'); return; }
 
         const baseManual = {
             title,
@@ -1154,7 +1156,7 @@
             try {
                 for (let i = 0; i < maSelectedSkipItems.length; i++) {
                     const sel = maSelectedSkipItems[i];
-                    const q = (sel.quality || quality || '1080p').trim();
+                    const q = (sel.quality || quality || effectiveQuality || maGuessQuality((sel.item && (sel.item.file_name || sel.item.caption)) || '') || 'HD').trim();
                     const payload = {
                         media_type: maType,
                         stream: { quality: q, name: (sel.item.file_name || undefined), parts: [] },
