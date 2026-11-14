@@ -3017,10 +3017,37 @@ async def list_skip_pending_api() -> dict:
 
 
 async def delete_skip_pending_api(pending_id: str) -> dict:
+    item = await db.get_skip_pending(pending_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Pending item not found.")
+
+    deleted_telegram = False
+    tg_error = None
+    try:
+        client = _scan_client()
+        if client is not None and item.get("skip_chat_id") is not None and item.get("skip_msg_id") is not None:
+            chat_id = int(item.get("skip_chat_id"))
+            msg_id = int(item.get("skip_msg_id"))
+            try:
+                await client.delete_messages(chat_id, msg_id)
+                deleted_telegram = True
+            except Exception as e:
+                tg_error = str(e)
+                LOGGER.warning(f"[SkipPending] Could not delete Telegram message {msg_id} in {chat_id}: {e}")
+    except Exception as e:
+        tg_error = str(e)
+
     ok = await db.remove_skip_pending(pending_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Pending item not found.")
-    return {"status": "success", "message": "Pending item removed."}
+
+    if deleted_telegram:
+        msg = "Archivo skip eliminado de Telegram y de la lista pendiente."
+    elif tg_error:
+        msg = f"Archivo eliminado de la lista pendiente, pero no se pudo borrar de Telegram: {tg_error}"
+    else:
+        msg = "Archivo eliminado de la lista pendiente."
+    return {"status": "success", "message": msg, "deleted_telegram": deleted_telegram}
 
 
 async def search_skip_pending_api(media_type: str, query: str, year: int | None = None):
@@ -3111,14 +3138,6 @@ async def apply_skip_pending_api(pending_id: str, payload: dict) -> dict:
         if resolved.get("part_number") is not None:
             metadata_info["part_number"] = resolved.get("part_number")
 
-    # try apply thumb from actual message
-    try:
-        msg_obj = await client.get_messages(skip_chat_id, skip_msg_id)
-        if msg_obj and not getattr(msg_obj, "empty", False):
-            await apply_video_thumb_to_metadata(metadata_info, msg_obj, encoded, client)
-    except Exception:
-        pass
-
     # Build a canonical, parseable caption/name so the file can be indexed by the bot itself
     try:
         m_title = (metadata_info.get("title") or "").strip()
@@ -3140,23 +3159,72 @@ async def apply_skip_pending_api(pending_id: str, payload: dict) -> dict:
         if not canonical_base.strip():
             canonical_base = (resolved.get("name") or title_src or "file").strip()
         canonical_caption = caption_with_id(canonical_base, metadata_info) or canonical_base
-        try:
-            await edit_message(skip_chat_id, skip_msg_id, canonical_caption)
-        except Exception:
-            # fallback to stamping helper (may preserve old base but adds id)
-            try:
-                await stamp_caption_by_ref(client, channel_norm, skip_msg_id, metadata_info)
-            except Exception:
-                pass
-        title_clean = finalize_media_name(canonical_base, bool(metadata_info.get("group_key")))
     except Exception:
-        title_clean = finalize_media_name(resolved.get("name") or title_src, bool(metadata_info.get("group_key")))
+        canonical_base = (resolved.get("name") or title_src or "file").strip()
+        canonical_caption = canonical_base
+
+    # Move file out of skip channel to corresponding destination channel, then index it
+    settings = SettingsManager.current()
+    auth_norms = {str(c).replace("-100", "").lstrip("@") for c in (settings.auth_channels or [])}
+    src = item.get("source_chat_id")
+    dest_norm = None
+    if src is not None:
+        src_norm = str(src).replace("-100", "").lstrip("@")
+        if src_norm in auth_norms or auth_norms == set():
+            dest_norm = src_norm
+    if dest_norm is None and settings.auth_channels:
+        dest_norm = str(settings.auth_channels[0]).replace("-100", "").lstrip("@")
+    if not dest_norm:
+        raise HTTPException(status_code=400, detail="No hay un canal de destino configurado (AUTH) para mover el archivo.")
+    dest_chat_full = int(f"-100{dest_norm}")
+
+    try:
+        copied_msg = await client.copy_message(
+            chat_id=dest_chat_full,
+            from_chat_id=skip_chat_id,
+            message_id=skip_msg_id,
+            caption=canonical_caption,
+        )
+        if copied_msg is None:
+            raise HTTPException(status_code=500, detail="No se pudo mover el archivo al canal de destino.")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"No se pudo mover/indexar el archivo desde el canal de skip: {exc}")
+
+    new_chat_ref = getattr(getattr(copied_msg, "chat", None), "id", dest_chat_full)
+    new_chat_norm = int(str(new_chat_ref).replace("-100", ""))
+    new_msg_id = int(copied_msg.id)
+
+    # Re-resolve and update metadata for the moved message
+    try:
+        resolved = await resolve_telegram_message(client, chat_id=str(new_chat_ref), msg_id=new_msg_id)
+    except Exception:
+        # fallback minimal
+        resolved = {"name": canonical_base, "size": get_readable_file_size(int(item.get("file_size") or 0)), "raw_size": int(item.get("file_size") or 0), "quality": metadata_info.get("quality") or "HD"}
+
+    encoded = await encode_string({"chat_id": new_chat_norm, "msg_id": new_msg_id})
+    metadata_info["encoded_string"] = encoded
+    # adjust group key channel if present
+    if metadata_info.get("group_key"):
+        split_key = resolved.get("split_key")
+        if split_key:
+            metadata_info["group_key"] = f"{new_chat_norm}:{metadata_info.get('quality')}:{split_key}"
+
+    try:
+        msg_obj = await client.get_messages(new_chat_ref, new_msg_id)
+        if msg_obj and not getattr(msg_obj, "empty", False):
+            await apply_video_thumb_to_metadata(metadata_info, msg_obj, encoded, client)
+    except Exception:
+        pass
+
+    title_clean = finalize_media_name(canonical_base, bool(metadata_info.get("group_key")))
 
     insert_status = {}
     updated_id = await db.insert_media(
         metadata_info,
-        channel=channel_norm,
-        msg_id=skip_msg_id,
+        channel=new_chat_norm,
+        msg_id=new_msg_id,
         size=resolved.get("size") or get_readable_file_size(int(resolved.get("raw_size") or item.get("file_size") or 0)),
         name=title_clean,
         raw_size=int(resolved.get("raw_size") or item.get("file_size") or 0),
@@ -3166,11 +3234,16 @@ async def apply_skip_pending_api(pending_id: str, payload: dict) -> dict:
     if not updated_id:
         raise HTTPException(status_code=500, detail="Failed to index the file with selected metadata.")
 
+    # remove from skip channel and pending DB
+    try:
+        await client.delete_messages(skip_chat_id, skip_msg_id)
+    except Exception as e:
+        LOGGER.warning(f"[SkipPending] Could not delete original skip message {skip_msg_id}: {e}")
     await db.resolve_skip_pending(pending_id)
     start_single_media_catalog_sync(db, tmdb_id=metadata_info.get("tmdb_id"), media_type=metadata_info.get("media_type"))
     return {
         "status": "success",
-        "message": "Archivo indexado y renombrado con metadata adecuada.",
+        "message": "Archivo movido desde el canal de skip, indexado y eliminado de pendientes.",
         "media_type": metadata_info.get("media_type"),
         "tmdb_id": metadata_info.get("tmdb_id"),
         "db_index": getattr(db, "current_db_index", 1),
