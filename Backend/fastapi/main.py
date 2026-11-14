@@ -31,6 +31,8 @@ from Backend.fastapi.routes.api_routes import (
     delete_custom_catalog_api,
     delete_media_api,
     delete_movie_quality_api,
+    update_movie_quality_api,
+    update_tv_quality_api,
     export_config_api,
     import_config_api,
     delete_tv_episode_api,
@@ -419,9 +421,17 @@ async def update_media(request: Request, tmdb_id: int, db_index: int, media_type
 async def delete_movie_quality(tmdb_id: int, db_index: int, id: str, _: bool = Depends(require_auth)):
     return await delete_movie_quality_api(tmdb_id, db_index, id)
 
+@app.put("/api/media/update-quality")
+async def update_movie_quality(payload: dict, _: bool = Depends(require_auth)):
+    return await update_movie_quality_api(payload)
+
 @app.delete("/api/media/delete-tv-quality")
 async def delete_tv_quality(tmdb_id: int, db_index: int, season: int, episode: int, id: str, _: bool = Depends(require_auth)):
     return await delete_tv_quality_api(tmdb_id, db_index, season, episode, id)
+
+@app.put("/api/media/update-tv-quality")
+async def update_tv_quality(payload: dict, _: bool = Depends(require_auth)):
+    return await update_tv_quality_api(payload)
 
 @app.delete("/api/media/delete-tv-episode")
 async def delete_tv_episode(tmdb_id: int, db_index: int, season: int, episode: int, _: bool = Depends(require_auth)):

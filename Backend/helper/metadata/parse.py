@@ -80,6 +80,9 @@ def _clean_title_after_episode(title: str, name: str) -> str:
     if not t:
         # fall back to filename without extension
         t = re.sub(r"\.[a-z0-9]{2,4}$", " ", name or "", flags=re.I)
+    # normalize common separators (dots, underscores, repeated dashes/spaces)
+    t = t.replace("_", " ")
+    t = re.sub(r"[\.]+", " ", t)
     t = _CAPITULO_NXNN_RE.sub(" ", t)
     t = re.sub(r"(?i)\b(?:cap[ií]tulos?|cap\.?|episodios?|episode|ep\.?)\b", " ", t)
     t = _NXNN_RE.sub(" ", t)
@@ -88,7 +91,7 @@ def _clean_title_after_episode(title: str, name: str) -> str:
     t = _QUALITY_TOKEN_RE.sub(" ", t)
     t = re.sub(r"(?i)\b\d{3,4}p\b", " ", t)
     t = _YEAR_RE.sub(" ", t)
-    t = re.sub(r"[\s._\-–—]+", " ", t).strip(" -:|")
+    t = re.sub(r"[\s\-–—]+", " ", t).strip(" -:|")
     return t or (title or "").strip()
 
 
@@ -163,6 +166,14 @@ def parse_media_name(name: str) -> dict:
                 parsed["episode"] = episode
             # Clean title so provider search uses the show name, not "capitulo 16x02 ..."
             parsed["title"] = _clean_title_after_episode(parsed.get("title") or "", name)
+
+    # Normalize separators in parsed title for better provider matching
+    if parsed.get("title"):
+        t = str(parsed["title"]).replace("_", " ")
+        t = re.sub(r"[\.]+", " ", t)
+        t = re.sub(r"\s+", " ", t).strip(" -:|")
+        if t:
+            parsed["title"] = t
 
     return parsed
 

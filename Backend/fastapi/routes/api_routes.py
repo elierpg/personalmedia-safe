@@ -287,6 +287,48 @@ async def delete_movie_quality_api(tmdb_id: str | int, db_index: int, id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+async def update_movie_quality_api(payload: dict):
+    tmdb_id = _require_tmdb_id(payload.get("tmdb_id"))
+    db_index = int(payload.get("db_index", 1))
+    stream_id = str(payload.get("id") or "").strip()
+    if not stream_id:
+        raise HTTPException(status_code=400, detail="id is required")
+    quality = payload.get("quality")
+    name = payload.get("name")
+    if (quality is None or str(quality).strip() == "") and (name is None or str(name).strip() == ""):
+        raise HTTPException(status_code=400, detail="Provide quality and/or name to update")
+    try:
+        result = await db.update_movie_stream(tmdb_id, db_index, stream_id, quality=quality, name=name)
+        if result:
+            return {"message": "Stream updated successfully"}
+        raise HTTPException(status_code=404, detail="Stream not found or no changes made")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+async def update_tv_quality_api(payload: dict):
+    tmdb_id = _require_tmdb_id(payload.get("tmdb_id"))
+    db_index = int(payload.get("db_index", 1))
+    season = int(payload.get("season"))
+    episode = int(payload.get("episode"))
+    stream_id = str(payload.get("id") or "").strip()
+    if not stream_id:
+        raise HTTPException(status_code=400, detail="id is required")
+    quality = payload.get("quality")
+    name = payload.get("name")
+    if (quality is None or str(quality).strip() == "") and (name is None or str(name).strip() == ""):
+        raise HTTPException(status_code=400, detail="Provide quality and/or name to update")
+    try:
+        result = await db.update_tv_stream(tmdb_id, db_index, season, episode, stream_id, quality=quality, name=name)
+        if result:
+            return {"message": "Stream updated successfully"}
+        raise HTTPException(status_code=404, detail="Stream not found or no changes made")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 async def delete_tv_quality_api(
     tmdb_id: str | int, db_index: int, season: int, episode: int, id: str
 ):

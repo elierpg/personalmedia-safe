@@ -822,7 +822,39 @@
         if (m) return { season: parseInt(m[1],10), episode: parseInt(m[2],10) };
         m = n.match(/\b(?:cap(?:[ií]tulo)?|episodio|ep\.?)?\s*(\d{1,2})x(\d{1,3})\b/i);
         if (m) return { season: parseInt(m[1],10), episode: parseInt(m[2],10) };
+        m = n.match(/\b(\d{1,2})x(\d{1,3})\b/i);
+        if (m) return { season: parseInt(m[1],10), episode: parseInt(m[2],10) };
         return { season: null, episode: null };
+    }
+
+    function maGuessYear(name) {
+        const n = String(name || '');
+        const m = n.match(/(?:^|[^0-9])((?:19|20)\d{2})(?:[^0-9]|$)/);
+        return m ? m[1] : '';
+    }
+
+    function maGuessQuality(name) {
+        const n = String(name || '');
+        const m = n.match(/\b(2160p|1440p|1080p|720p|480p|360p|4k)\b/i);
+        if (!m) return '';
+        return m[1].toLowerCase() === '4k' ? '2160p' : m[1];
+    }
+
+    function maSetQualityValue(q) {
+        if (!q) return;
+        const sel = document.getElementById('ma-quality');
+        const custom = document.getElementById('ma-quality-custom');
+        if (!sel || !custom) return;
+        const opt = [...sel.options].find(o => o.value.toLowerCase() === String(q).toLowerCase());
+        if (opt) {
+            sel.value = opt.value;
+            custom.classList.add('hidden');
+            custom.value = '';
+        } else {
+            sel.value = '__custom';
+            custom.value = q;
+            custom.classList.remove('hidden');
+        }
     }
 
     async function loadMaSkipItems() {
@@ -934,16 +966,25 @@
         } else {
             const it = maSkipItems.find(x => String(x.id) === sid);
             if (!it) return;
-            const baseName = (it.file_name || it.caption || '').replace(/\.[^.]+$/, '').replace(/[._]+/g, ' ').trim();
-            // Put selected skipped file text directly into search box (and prefill title if empty)
+            const rawName = it.file_name || it.caption || '';
+            const baseName = rawName.replace(/\.[^.]+$/, '').replace(/[._-]+/g, ' ').replace(/\s+/g, ' ').trim();
+            // Put selected skipped file text directly into search box (and prefill fields if empty)
             const sq = document.getElementById('ma-search-query');
-            if (sq) sq.value = baseName || (it.file_name || it.caption || '');
+            if (sq) sq.value = baseName || rawName;
             const t = document.getElementById('ma-m-title');
             if (t && !t.value.trim() && baseName) t.value = baseName;
             const n = document.getElementById('ma-name');
             if (n && !n.value.trim() && it.file_name) n.value = it.file_name;
-            const g = maGuessEpisodeInfo(it.file_name || it.caption || '');
-            const q = maQuality() || '1080p';
+            const g = maGuessEpisodeInfo(rawName);
+            const gq = maGuessQuality(rawName);
+            const gy = maGuessYear(rawName);
+            if (gy && !document.getElementById('ma-m-year').value) document.getElementById('ma-m-year').value = gy;
+            if (gq) maSetQualityValue(gq);
+            if (maType === 'tv') {
+                if (g.season != null && !document.getElementById('ma-season').value) document.getElementById('ma-season').value = g.season;
+                if (g.episode != null && !document.getElementById('ma-episode').value) document.getElementById('ma-episode').value = g.episode;
+            }
+            const q = gq || maQuality() || '1080p';
             maSelectedSkipItems.push({ item: it, quality: q, season: g.season, episode: g.episode });
         }
         maRenderSelectedSkipItems();

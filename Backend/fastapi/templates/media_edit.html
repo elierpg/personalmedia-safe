@@ -515,6 +515,7 @@
                     <p class="file-sub">{{ quality.size }}{% if quality.parts %} · {{ quality.parts|length }} partes{% endif %}</p>
                 </div>
                 <div class="file-actions">
+                    <button type="button" class="icon-act" data-id="{{ quality.id }}" data-q="{{ quality.quality }}" data-name="{{ quality.name }}" onclick="editMovieQuality(this.dataset.id, this.dataset.q, this.dataset.name, this)" title="Editar archivo" aria-label="Editar archivo"><i class="fa-solid fa-pen"></i></button>
                     <button type="button" class="icon-act" data-id="{{ quality.id }}" data-name="{{ quality.name }}" onclick="copyStreamLink(this.dataset.id, this.dataset.name)" title="Copiar enlace de reproducción" aria-label="Copiar enlace de reproducción"><i class="fa-solid fa-link"></i></button>
                     <button type="button" class="icon-act" data-id="{{ quality.id }}" data-q="{{ quality.quality }}" onclick="runSpeedTest(this.dataset.id, 'movie', this.dataset.q)" title="Prueba de velocidad" aria-label="Prueba de velocidad"><i class="fa-solid fa-gauge-high"></i></button>
                     <button type="button" class="icon-act danger" data-id="{{ quality.id }}" onclick="deleteQuality(this.dataset.id, this)" title="Eliminar archivo" aria-label="Eliminar archivo"><i class="fa-solid fa-trash-can"></i></button>
@@ -580,6 +581,7 @@
                     <p class="file-sub">{{ quality.size }}{% if quality.parts %} · {{ quality.parts|length }} partes{% endif %}</p>
                 </div>
                 <div class="file-actions">
+                    <button type="button" class="icon-act" data-id="{{ quality.id }}" data-q="{{ quality.quality }}" data-name="{{ quality.name }}" onclick="editTVQuality({{ season.season_number }}, {{ episode.episode_number }}, this.dataset.id, this.dataset.q, this.dataset.name, this)" title="Editar archivo" aria-label="Editar archivo"><i class="fa-solid fa-pen"></i></button>
                     <button type="button" class="icon-act" data-id="{{ quality.id }}" data-name="{{ quality.name }}" onclick="copyStreamLink(this.dataset.id, this.dataset.name)" title="Copiar enlace de reproducción" aria-label="Copiar enlace de reproducción"><i class="fa-solid fa-link"></i></button>
                     <button type="button" class="icon-act" data-id="{{ quality.id }}" data-q="{{ quality.quality }}" onclick="runSpeedTest(this.dataset.id, 'tv', this.dataset.q)" title="Prueba de velocidad" aria-label="Prueba de velocidad"><i class="fa-solid fa-gauge-high"></i></button>
                     <button type="button" class="icon-act danger" data-id="{{ quality.id }}" onclick="deleteTVQuality({{ season.season_number }}, {{ episode.episode_number }}, this.dataset.id, this)" title="Eliminar archivo" aria-label="Eliminar archivo"><i class="fa-solid fa-trash-can"></i></button>
@@ -1058,6 +1060,92 @@
             document.getElementById(emptyId)?.classList.remove('hidden');
         }
     }
+
+    function _qBadgeClass(q) {
+        const v = String(q || '').toLowerCase().replace('2160p','4k');
+        return 'q-badge q-' + v;
+    }
+
+    async function editMovieQuality(id, currentQuality, currentName, btn) {
+        const newQuality = prompt('Calidad del archivo (ej. 480p, 720p, 1080p, 2160p):', currentQuality || '');
+        if (newQuality === null) return;
+        const newName = prompt('Nombre del archivo (opcional):', currentName || '');
+        if (newName === null) return;
+        const qv = (newQuality || '').trim();
+        const nv = (newName || '').trim();
+        if (!qv && !nv) { showToast('No hay cambios.', 'info', 'Editar archivo'); return; }
+        btn.disabled = true;
+        try {
+            const res = await fetch('/api/media/update-quality', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tmdb_id: tmdbId, db_index: dbIndex, id, quality: qv || undefined, name: nv || undefined })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.detail || 'Error al actualizar');
+            const row = btn.closest('[data-quality-row]');
+            if (row) {
+                if (qv) {
+                    const badge = row.querySelector('.q-badge');
+                    if (badge) { badge.textContent = qv; badge.className = _qBadgeClass(qv); }
+                    btn.dataset.q = qv;
+                    const st = row.querySelector('[onclick^="runSpeedTest"]'); if (st) st.dataset.q = qv;
+                }
+                if (nv) {
+                    const nm = row.querySelector('.file-name');
+                    if (nm) { nm.textContent = nv; nm.title = nv; }
+                    btn.dataset.name = nv;
+                    const copy = row.querySelector('[onclick^="copyStreamLink"]'); if (copy) copy.dataset.name = nv;
+                }
+            }
+            showToast('Archivo actualizado.', 'success', 'Editar archivo');
+        } catch (e) {
+            showToast(e.message || 'Error al actualizar.', 'error', 'Error');
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    async function editTVQuality(season, episode, id, currentQuality, currentName, btn) {
+        const newQuality = prompt('Calidad del archivo (ej. 480p, 720p, 1080p, 2160p):', currentQuality || '');
+        if (newQuality === null) return;
+        const newName = prompt('Nombre del archivo (opcional):', currentName || '');
+        if (newName === null) return;
+        const qv = (newQuality || '').trim();
+        const nv = (newName || '').trim();
+        if (!qv && !nv) { showToast('No hay cambios.', 'info', 'Editar archivo'); return; }
+        btn.disabled = true;
+        try {
+            const res = await fetch('/api/media/update-tv-quality', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tmdb_id: tmdbId, db_index: dbIndex, season: Number(season), episode: Number(episode), id, quality: qv || undefined, name: nv || undefined })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.detail || 'Error al actualizar');
+            const row = btn.closest('[data-tv-quality]');
+            if (row) {
+                if (qv) {
+                    const badge = row.querySelector('.q-badge');
+                    if (badge) { badge.textContent = qv; badge.className = _qBadgeClass(qv); }
+                    btn.dataset.q = qv;
+                    const st = row.querySelector('[onclick^="runSpeedTest"]'); if (st) st.dataset.q = qv;
+                }
+                if (nv) {
+                    const nm = row.querySelector('.file-name');
+                    if (nm) { nm.textContent = nv; nm.title = nv; }
+                    btn.dataset.name = nv;
+                    const copy = row.querySelector('[onclick^="copyStreamLink"]'); if (copy) copy.dataset.name = nv;
+                }
+            }
+            showToast('Archivo actualizado.', 'success', 'Editar archivo');
+        } catch (e) {
+            showToast(e.message || 'Error al actualizar.', 'error', 'Error');
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
 
     async function deleteQuality(id, btn) {
         if (!confirm(`¿Seguro que quieres eliminar ${id}?`)) return;

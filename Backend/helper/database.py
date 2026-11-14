@@ -2266,6 +2266,49 @@ class Database:
             return len(tv["seasons"]) != original_len
         return await self._edit_media_doc("tv", tmdb_id, db_index, mutate)
 
+    async def update_movie_stream(self, tmdb_id: int, db_index: int, stream_id: str, quality: Optional[str] = None, name: Optional[str] = None) -> bool:
+        quality = str(quality).strip() if quality is not None else None
+        name = str(name).strip() if name is not None else None
+
+        async def mutate(movie):
+            changed = False
+            for q in movie.get("telegram", []):
+                if q.get("id") == stream_id:
+                    if quality and q.get("quality") != quality:
+                        q["quality"] = quality
+                        changed = True
+                    if name and q.get("name") != name:
+                        q["name"] = name
+                        changed = True
+                    break
+            return changed
+        return await self._edit_media_doc("movie", tmdb_id, db_index, mutate)
+
+    async def update_tv_stream(self, tmdb_id: int, db_index: int, season_number: int, episode_number: int, stream_id: str, quality: Optional[str] = None, name: Optional[str] = None) -> bool:
+        quality = str(quality).strip() if quality is not None else None
+        name = str(name).strip() if name is not None else None
+
+        async def mutate(tv):
+            changed = False
+            for season in tv.get("seasons", []):
+                if season.get("season_number") != season_number:
+                    continue
+                for episode in season.get("episodes", []):
+                    if episode.get("episode_number") != episode_number:
+                        continue
+                    for q in episode.get("telegram", []):
+                        if q.get("id") == stream_id:
+                            if quality and q.get("quality") != quality:
+                                q["quality"] = quality
+                                changed = True
+                            if name and q.get("name") != name:
+                                q["name"] = name
+                                changed = True
+                            return changed
+            return changed
+        return await self._edit_media_doc("tv", tmdb_id, db_index, mutate)
+
+
 
     #----- Get per-DB statistics (movies, tv shows, used size, etc.)
     async def get_database_stats(self):
