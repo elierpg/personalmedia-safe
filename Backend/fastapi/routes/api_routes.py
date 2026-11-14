@@ -34,7 +34,6 @@ from Backend.helper.manual_add import resolve_telegram_message, retag_media, sta
 from Backend.helper.pyro import resolve_video_thumb_url
 from Backend.helper.metadata import (
     build_id_link,
-    clean_filename,
     extract_default_id,
     fetch_selected_movie_metadata,
     fetch_selected_tv_metadata,
@@ -46,7 +45,7 @@ from Backend.helper.metadata import (
     search_tv_candidates,
 )
 from Backend.helper.passwords import hash_password, verify_password
-from Backend.helper.pyro import apply_video_thumb_to_metadata, finalize_media_name, get_readable_file_size, get_readable_time
+from Backend.helper.pyro import apply_video_thumb_to_metadata, clean_filename, finalize_media_name, get_readable_file_size, get_readable_time
 from Backend.helper.scan_manager import dbcheck_manager, duplicate_manager, scan_manager
 from Backend.helper.session_auth import (
     disconnect_session,
