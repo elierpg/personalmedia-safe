@@ -514,6 +514,51 @@
         </div>
     </div>
 
+
+    <!-- ══ Skip Channel Pending ════════════════════════════════════════ -->
+    <div class="tool-card">
+        <div class="flex items-center justify-between flex-wrap gap-2">
+            <h2 style="margin-bottom:0"><i class="fa-solid fa-inbox"></i> Archivos pendientes (Canal de skip)</h2>
+            <span id="skip-pending-count" class="status-pill status-idle">0</span>
+        </div>
+        <p class="hint mt-3 mb-4">
+            Archivos enviados al canal de skip por fallo de metadata. Selecciona uno, busca la metadata correcta y asígnala para indexarlo.
+        </p>
+        <div class="flex items-center gap-2 flex-wrap mb-3">
+            <button class="btn btn-ghost" type="button" onclick="loadSkipPending()"><i class="fa-solid fa-rotate"></i> Actualizar lista</button>
+            <button class="btn btn-primary" type="button" onclick="syncSkipPending()"><i class="fa-solid fa-cloud-arrow-down"></i> Importar desde canal</button>
+        </div>
+        <div id="skip-pending-list" class="dead-list">
+            <div class="hint">Cargando…</div>
+        </div>
+
+        <div id="skip-assign-box" class="hidden mt-4" style="border-top:1px solid var(--border);padding-top:1rem">
+            <div class="text-sm font-semibold mb-2">Asignar metadata</div>
+            <div class="hint mb-2" id="skip-assign-file">—</div>
+            <input type="hidden" id="skip-assign-id">
+            <div class="flex flex-wrap gap-2 mb-2">
+                <select id="skip-media-type" class="s-input" style="max-width:180px">
+                    <option value="movie">Película</option>
+                    <option value="tv">Serie (TV)</option>
+                </select>
+                <input id="skip-query" class="s-input" style="flex:1;min-width:220px" placeholder="Buscar título, IMDb o TMDB…" onkeydown="if(event.key==='Enter'){event.preventDefault();searchSkipMeta();}">
+                <button class="btn btn-primary" type="button" onclick="searchSkipMeta()"><i class="fa-solid fa-magnifying-glass"></i> Buscar</button>
+            </div>
+            <div class="flex flex-wrap gap-2 mb-2" id="skip-tv-hints" style="display:none">
+                <input id="skip-season" type="number" min="0" class="s-input" style="max-width:140px" placeholder="Temporada">
+                <input id="skip-episode" type="number" min="0" class="s-input" style="max-width:140px" placeholder="Episodio">
+                <input id="skip-quality" class="s-input" style="max-width:160px" placeholder="Calidad (opcional)">
+            </div>
+            <div id="skip-search-state" class="hint mb-2" style="display:none"></div>
+            <div id="skip-results" class="dead-list mb-3" style="display:none"></div>
+            <div id="skip-selected" class="hint mb-2" style="display:none"></div>
+            <div class="flex items-center gap-2 flex-wrap">
+                <button class="btn btn-primary" type="button" id="skip-apply-btn" onclick="applySkipMeta()" disabled><i class="fa-solid fa-check"></i> Indexar con esta metadata</button>
+                <button class="btn btn-ghost" type="button" onclick="closeSkipAssign()">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 <script>
@@ -1440,8 +1485,163 @@ function escapeHtmlAttr(str) {
     return String(str || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
 }
 
+
+/* ─────────────── Skip Channel Pending ─────────────── */
+let skipPendingItems = [];
+let skipResults = [];
+let skipSelected = null;
+
+function fmtBytes(n){ n=Number(n||0); if(!n) return '—'; const u=['B','KB','MB','GB','TB']; let i=0; while(n>=1024&&i<u.length-1){n/=1024;i++;} return (i? n.toFixed(2):n)+' '+u[i]; }
+
+
+async function syncSkipPending(){
+  try{
+    showToast('Importando archivos desde el canal de skip…', 'info', 'Skip');
+    const res = await fetch('/api/admin/skip-pending/sync', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({limit:150}) });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.detail || 'Error');
+    showToast(data.message || 'Sincronizado.', 'success', 'Skip');
+    loadSkipPending();
+  }catch(e){ showToast(e.message||'Error al importar.', 'error', 'Skip'); }
+}
+
+async function loadSkipPending(){
+  const box = document.getElementById('skip-pending-list');
+  const pill = document.getElementById('skip-pending-count');
+  if(!box) return;
+  box.innerHTML = '<div class="hint"><i class="fa-solid fa-spinner fa-spin"></i> Cargando…</div>';
+  try{
+    const res = await fetch('/api/admin/skip-pending');
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.detail || 'Error');
+    skipPendingItems = data.items || [];
+    if(pill){ pill.textContent = skipPendingItems.length; pill.className = 'status-pill ' + (skipPendingItems.length? 'status-paused':'status-idle'); }
+    if(!skipPendingItems.length){ box.innerHTML = '<div class="hint">No hay archivos pendientes en el canal de skip.</div>'; return; }
+    box.innerHTML = skipPendingItems.map(it => `
+      <div class="dead-item" style="align-items:flex-start">
+        <div class="min-w-0" style="flex:1">
+          <div class="font-semibold truncate" title="${escapeHtmlAttr(it.file_name||'')}">${escapeHtml(it.file_name||'Archivo')}</div>
+          <div class="c-id">${escapeHtml(fmtBytes(it.file_size))} · skip msg ${escapeHtml(String(it.skip_msg_id||''))}${it.created_at? ' · '+escapeHtml(String(it.created_at).replace('T',' ').slice(0,19)) : ''}</div>
+          ${it.caption ? `<div class="hint mt-1" style="white-space:pre-wrap">${escapeHtml(String(it.caption).slice(0,220))}</div>`:''}
+        </div>
+        <div class="flex items-center gap-2 flex-wrap" style="flex-shrink:0">
+          <button class="btn btn-primary" type="button" onclick="openSkipAssign('${escapeHtmlAttr(it.id)}')"><i class="fa-solid fa-wand-magic-sparkles"></i> Asignar</button>
+          <button class="btn btn-ghost" type="button" onclick="removeSkipPending('${escapeHtmlAttr(it.id)}')" title="Quitar de la lista"><i class="fa-solid fa-trash"></i></button>
+        </div>
+      </div>`).join('');
+  }catch(e){ box.innerHTML = `<div class="hint" style="color:var(--danger)">${escapeHtml(e.message||'Error al cargar')}</div>`; }
+}
+
+function openSkipAssign(id){
+  const it = skipPendingItems.find(x => String(x.id)===String(id));
+  if(!it) return;
+  document.getElementById('skip-assign-id').value = it.id;
+  document.getElementById('skip-assign-file').textContent = `${it.file_name||'Archivo'} (skip msg ${it.skip_msg_id||''})`;
+  document.getElementById('skip-query').value = (it.file_name||'').replace(/\.[^.]+$/,'').replace(/[._]+/g,' ').trim();
+  document.getElementById('skip-assign-box').classList.remove('hidden');
+  document.getElementById('skip-results').style.display='none'; document.getElementById('skip-results').innerHTML='';
+  document.getElementById('skip-selected').style.display='none'; document.getElementById('skip-selected').textContent='';
+  document.getElementById('skip-search-state').style.display='none';
+  skipResults=[]; skipSelected=null; document.getElementById('skip-apply-btn').disabled=true;
+  onSkipMediaTypeChange();
+  document.getElementById('skip-query').focus();
+}
+
+function closeSkipAssign(){
+  document.getElementById('skip-assign-box').classList.add('hidden');
+  document.getElementById('skip-assign-id').value='';
+  skipResults=[]; skipSelected=null;
+}
+
+function onSkipMediaTypeChange(){
+  const mt = document.getElementById('skip-media-type').value;
+  document.getElementById('skip-tv-hints').style.display = (mt==='tv') ? '' : 'none';
+}
+
+document.addEventListener('DOMContentLoaded', ()=>{
+  const mt = document.getElementById('skip-media-type');
+  if(mt) mt.addEventListener('change', onSkipMediaTypeChange);
+});
+
+async function searchSkipMeta(){
+  const q = document.getElementById('skip-query').value.trim();
+  const mt = document.getElementById('skip-media-type').value || 'movie';
+  const state = document.getElementById('skip-search-state');
+  const box = document.getElementById('skip-results');
+  if(!q){ showToast('Escribe un título para buscar.', 'error', 'Búsqueda'); return; }
+  state.style.display=''; state.textContent='Buscando…';
+  box.style.display='none'; box.innerHTML='';
+  skipSelected=null; document.getElementById('skip-apply-btn').disabled=true;
+  document.getElementById('skip-selected').style.display='none';
+  try{
+    const res = await fetch(`/api/admin/skip-pending/search?media_type=${encodeURIComponent(mt)}&query=${encodeURIComponent(q)}`);
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.detail || 'Error en búsqueda');
+    skipResults = data.results || [];
+    if(!skipResults.length){ state.textContent='Sin resultados. Prueba con otro nombre o un ID de IMDb/TMDB.'; return; }
+    state.textContent = `${skipResults.length} resultado(s). Selecciona uno:`;
+    box.innerHTML = skipResults.map((r,i)=>`
+      <label class="chip" onclick="pickSkipResult(${i})">
+        <img src="${escapeHtmlAttr(r.poster) || '/static/placeholder.svg'}" onerror="this.src='/static/placeholder.svg'" style="width:2.25rem;height:3.25rem;object-fit:cover;border-radius:0.35rem;flex-shrink:0;background:var(--card)">
+        <span class="min-w-0">
+          <span class="c-name block truncate">${escapeHtml(r.title||'')}</span>
+          <span class="c-id">${escapeHtml(String(r.year||'—'))} · ${escapeHtml(String(r.source||'').toUpperCase())} · ${escapeHtml(String(r.id||r.imdb_id||r.tmdb_id||''))}</span>
+        </span>
+      </label>`).join('');
+    box.style.display='';
+  }catch(e){ state.textContent = e.message || 'Error en búsqueda.'; }
+}
+
+function pickSkipResult(i){
+  const r = skipResults[i]; if(!r) return; skipSelected = r;
+  const sel = document.getElementById('skip-selected');
+  const sid = r.id || r.imdb_id || r.tmdb_id || r.selected_id || '';
+  sel.style.display=''; sel.textContent = `Seleccionado: ${r.title||''} (${r.year||'—'}) [${sid}]`;
+  document.getElementById('skip-apply-btn').disabled = !sid;
+  document.getElementById('skip-results').style.display='none';
+}
+
+async function applySkipMeta(){
+  const pendingId = document.getElementById('skip-assign-id').value;
+  if(!pendingId || !skipSelected){ showToast('Selecciona un resultado primero.', 'error', 'Skip'); return; }
+  const mt = document.getElementById('skip-media-type').value || 'movie';
+  const selected_id = skipSelected.id || skipSelected.imdb_id || (skipSelected.tmdb_id!=null ? String(skipSelected.tmdb_id) : (skipSelected.selected_id||''));
+  const payload = { media_type: mt, selected_id };
+  if(mt==='tv'){
+    const s = document.getElementById('skip-season').value; if(s!=='') payload.season = parseInt(s,10);
+    const e = document.getElementById('skip-episode').value; if(e!=='') payload.episode = parseInt(e,10);
+  }
+  const q = document.getElementById('skip-quality').value.trim(); if(q) payload.quality = q;
+  const btn = document.getElementById('skip-apply-btn');
+  btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Indexando…';
+  try{
+    const res = await fetch(`/api/admin/skip-pending/${encodeURIComponent(pendingId)}/apply`, {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.detail || data.message || 'No se pudo indexar');
+    showToast(data.message || 'Archivo indexado.', 'success', 'Skip');
+    closeSkipAssign();
+    loadSkipPending();
+  }catch(e){ showToast(e.message || 'Error al indexar.', 'error', 'Skip'); }
+  finally{ btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-check"></i> Indexar con esta metadata'; }
+}
+
+async function removeSkipPending(id){
+  if(!confirm('¿Quitar este elemento pendiente de la lista? (no borra el mensaje del canal)')) return;
+  try{
+    const res = await fetch(`/api/admin/skip-pending/${encodeURIComponent(id)}`, { method:'DELETE' });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.detail || 'Error');
+    showToast('Elemento eliminado de pendientes.', 'info', 'Skip');
+    loadSkipPending();
+  }catch(e){ showToast(e.message||'Error', 'error', 'Skip'); }
+}
+
+
 /* ─────────────── Init ─────────────── */
 loadManualSession();
+loadSkipPending();
 loadChannels();
 pollScan().then(() => {
     const pill = document.getElementById('scan-status-pill');

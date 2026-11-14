@@ -2875,3 +2875,46 @@ class Database:
 
         updated_doc = await collection.find_one({"_id": source_id})
         return convert_objectid_to_str(updated_doc) if updated_doc else None
+    # ------------------------------------------------------------------
+    # Skip-pending (files routed to skip channel, awaiting metadata assignment)
+    # ------------------------------------------------------------------
+    async def list_skip_pending(self, limit: int = 200):
+        try:
+            cursor = self.dbs["tracking"]["skip_pending"].find(
+                {"status": {"$ne": "resolved"}}
+            ).sort("created_at", DESCENDING).limit(max(1, min(int(limit or 200), 1000)))
+            docs = await cursor.to_list(length=max(1, min(int(limit or 200), 1000)))
+            return [convert_objectid_to_str(d) for d in docs]
+        except Exception as e:
+            LOGGER.error(f"list_skip_pending failed: {e}")
+            return []
+
+    async def get_skip_pending(self, pending_id: str):
+        try:
+            doc = await self.dbs["tracking"]["skip_pending"].find_one({"_id": str(pending_id)})
+            return convert_objectid_to_str(doc) if doc else None
+        except Exception:
+            return None
+
+    async def remove_skip_pending(self, pending_id: str) -> bool:
+        try:
+            res = await self.dbs["tracking"]["skip_pending"].delete_one({"_id": str(pending_id)})
+            return res.deleted_count > 0
+        except Exception as e:
+            LOGGER.error(f"remove_skip_pending failed: {e}")
+            return False
+
+    async def resolve_skip_pending(self, pending_id: str) -> bool:
+        try:
+            res = await self.dbs["tracking"]["skip_pending"].update_one(
+                {"_id": str(pending_id)},
+                {"$set": {"status": "resolved", "updated_at": datetime.now(timezone.utc).isoformat()}}
+            )
+            if res.modified_count or res.matched_count:
+                await self.dbs["tracking"]["skip_pending"].delete_one({"_id": str(pending_id)})
+                return True
+            return False
+        except Exception as e:
+            LOGGER.error(f"resolve_skip_pending failed: {e}")
+            return False
+

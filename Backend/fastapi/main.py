@@ -101,6 +101,11 @@ from Backend.fastapi.routes.api_routes import (
     update_media_api,
     update_settings_api,
     update_token_limits_api,
+    list_skip_pending_api,
+    delete_skip_pending_api,
+    search_skip_pending_api,
+    apply_skip_pending_api,
+    sync_skip_pending_api,
 )
 from Backend.fastapi.routes.stream_routes import decay_client_failures
 from Backend.fastapi.routes.stream_routes import router as stream_router
@@ -123,7 +128,8 @@ from Backend.fastapi.routes.template_routes import (
 from Backend.fastapi.security.credentials import require_auth
 from Backend.pyrofork.bot import work_loads_summary
 
-templates = Jinja2Templates(directory="Backend/fastapi/templates")
+templates = Jinja2Templates(directory="Backend/fastapi/templates"    
+)
 
 app = FastAPI(
     title="Mi Media Server",
@@ -888,3 +894,35 @@ async def auth_exception_handler(request: Request, exc):
             headers.update(exc.headers)
         return JSONResponse(status_code=401, content={"detail": detail}, headers=headers)
     return RedirectResponse(url="/login", status_code=302)
+
+
+
+#----- Skip-pending items (skip channel files awaiting metadata)
+@app.get("/api/admin/skip-pending")
+async def admin_list_skip_pending(_: bool = Depends(require_auth)):
+    return await list_skip_pending_api()
+
+@app.delete("/api/admin/skip-pending/{pending_id}")
+async def admin_delete_skip_pending(pending_id: str, _: bool = Depends(require_auth)):
+    return await delete_skip_pending_api(pending_id)
+
+@app.get("/api/admin/skip-pending/search")
+async def admin_search_skip_pending(
+    media_type: str = Query("movie"),
+    query: str = Query(""),
+    year: int | None = Query(None),
+    _: bool = Depends(require_auth),
+):
+    return await search_skip_pending_api(media_type, query, year)
+
+@app.post("/api/admin/skip-pending/{pending_id}/apply")
+async def admin_apply_skip_pending(pending_id: str, payload: dict, _: bool = Depends(require_auth)):
+    return await apply_skip_pending_api(pending_id, payload)
+
+
+
+@app.post("/api/admin/skip-pending/sync")
+async def admin_sync_skip_pending(payload: dict = None, _: bool = Depends(require_auth)):
+    payload = payload or {}
+    return await sync_skip_pending_api(limit=int(payload.get("limit") or 100))
+

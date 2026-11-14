@@ -414,20 +414,31 @@ class ScanManager:
                 probe = await client.send_message(chat_id, SCAN_PROBE_TEXT)
             except Exception as ex:
                 LOGGER.warning(f"[ScanManager] Probe send failed for {chat_id}: {ex}")
-                return None
+                probe = None
         except Exception as e:
             LOGGER.warning(f"[ScanManager] Could not send probe to {chat_id}: {e}")
-            return None
+            probe = None
 
-        last_id = getattr(probe, "id", None)
+        if probe is not None:
+            last_id = getattr(probe, "id", None)
+            try:
+                await client.delete_messages(chat_id, probe.id)
+            except Exception as e:
+                LOGGER.warning(
+                    f"[ScanManager] Could not delete probe message "
+                    f"{getattr(probe, 'id', None)} in {chat_id}: {e}"
+                )
+            return last_id
+
+        # Fallback: infer latest message id from chat history (no send permission required)
         try:
-            await client.delete_messages(chat_id, probe.id)
+            async for msg in client.get_chat_history(chat_id, limit=1):
+                if msg and getattr(msg, "id", None):
+                    LOGGER.info(f"[ScanManager] Probe fallback: using latest history id {msg.id} for {chat_id}")
+                    return int(msg.id)
         except Exception as e:
-            LOGGER.warning(
-                f"[ScanManager] Could not delete probe message "
-                f"{getattr(probe, 'id', None)} in {chat_id}: {e}"
-            )
-        return last_id
+            LOGGER.warning(f"[ScanManager] History fallback failed for {chat_id}: {e}")
+        return None
 
     async def _process_message(self, client, message, chat_id: int) -> None:
         s = self.state
@@ -488,7 +499,7 @@ class ScanManager:
         if metadata_info is None:
             s["counters"]["skipped_meta"] += 1
             try:
-                await route_to_skip_channel(client, message)
+                await route_to_skip_channel(client, message, db=self._db, reason="metadata_failed")
             except Exception as e:
                 LOGGER.warning(f"[ScanManager] Skip-channel route failed for msg {msg_id}: {e}")
             return

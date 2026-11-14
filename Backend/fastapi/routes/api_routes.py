@@ -34,17 +34,19 @@ from Backend.helper.manual_add import resolve_telegram_message, retag_media, sta
 from Backend.helper.pyro import resolve_video_thumb_url
 from Backend.helper.metadata import (
     build_id_link,
+    clean_filename,
     extract_default_id,
     fetch_selected_movie_metadata,
     fetch_selected_tv_metadata,
     gradient_cover_path,
+    metadata,
     resolve_cover_url,
     search_any_candidates,
     search_movie_candidates,
     search_tv_candidates,
 )
 from Backend.helper.passwords import hash_password, verify_password
-from Backend.helper.pyro import get_readable_file_size, get_readable_time
+from Backend.helper.pyro import apply_video_thumb_to_metadata, finalize_media_name, get_readable_file_size, get_readable_time
 from Backend.helper.scan_manager import dbcheck_manager, duplicate_manager, scan_manager
 from Backend.helper.session_auth import (
     disconnect_session,
@@ -2835,3 +2837,198 @@ async def bot_admin_apply_status_api() -> dict:
             "error": st["error"],
         },
     }
+
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Skip-pending — files in skip channel awaiting metadata assignment
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def list_skip_pending_api() -> dict:
+    items = await db.list_skip_pending()
+    out = []
+    for it in items:
+        size = int(it.get("file_size") or 0)
+        out.append({
+            "id": it.get("_id"),
+            "skip_chat_id": it.get("skip_chat_id"),
+            "skip_msg_id": it.get("skip_msg_id"),
+            "source_chat_id": it.get("source_chat_id"),
+            "source_msg_id": it.get("source_msg_id"),
+            "file_name": it.get("file_name") or it.get("caption") or "Archivo",
+            "caption": it.get("caption"),
+            "file_size": size,
+            "size": get_readable_file_size(size),
+            "mime_type": it.get("mime_type"),
+            "reason": it.get("reason"),
+            "created_at": it.get("created_at"),
+        })
+    return {"status": "success", "items": out}
+
+
+async def delete_skip_pending_api(pending_id: str) -> dict:
+    ok = await db.remove_skip_pending(pending_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Pending item not found.")
+    return {"status": "success", "message": "Pending item removed."}
+
+
+async def search_skip_pending_api(media_type: str, query: str, year: int | None = None):
+    return await search_media_rescan_api(media_type, query, year)
+
+
+async def apply_skip_pending_api(pending_id: str, payload: dict) -> dict:
+    item = await db.get_skip_pending(pending_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Pending item not found.")
+
+    media_type = _normalize_media_type(payload.get("media_type", "movie"))
+    selected_id = str(payload.get("selected_id") or "").strip()
+    if not selected_id:
+        raise HTTPException(status_code=400, detail="selected_id is required.")
+
+    client = _scan_client()
+    if client is None:
+        raise HTTPException(status_code=503, detail="No Telegram client is connected yet.")
+
+    skip_chat_id = int(item.get("skip_chat_id"))
+    skip_msg_id = int(item.get("skip_msg_id"))
+
+    try:
+        resolved = await resolve_telegram_message(client, chat_id=str(skip_chat_id), msg_id=skip_msg_id)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not read file from skip channel: {e}")
+
+    title_src = resolved.get("name") or item.get("file_name") or item.get("caption") or "file"
+    channel_norm = int(str(skip_chat_id).replace("-100", ""))
+    season_hint = None
+    if media_type == "tv":
+        s_val = payload.get("season")
+        if s_val not in (None, ""):
+            try:
+                season_hint = int(s_val)
+            except Exception:
+                season_hint = None
+
+    override_for_meta = selected_id
+    metadata_info = await metadata(
+        clean_filename(title_src),
+        channel_norm,
+        skip_msg_id,
+        override_id=override_for_meta,
+        season_hint=season_hint,
+    )
+    if metadata_info is None:
+        # fallback: try to fetch selected metadata directly and build minimal info
+        if media_type == "movie":
+            md = await fetch_selected_movie_metadata(selected_id)
+            if not md:
+                raise HTTPException(status_code=404, detail="Unable to fetch metadata for selected item.")
+            quality = payload.get("quality") or resolved.get("quality") or "HD"
+            encoded = await encode_string({"chat_id": channel_norm, "msg_id": skip_msg_id})
+            metadata_info = {
+                "tmdb_id": md.get("tmdb_id"),
+                "imdb_id": md.get("imdb_id"),
+                "title": md.get("title"),
+                "year": md.get("release_year"),
+                "rate": md.get("rating") or 0,
+                "description": md.get("description") or "",
+                "poster": md.get("poster") or "",
+                "backdrop": md.get("backdrop") or "",
+                "logo": md.get("logo") or "",
+                "genres": md.get("genres") or [],
+                "cast": md.get("cast") or [],
+                "runtime": str(md.get("runtime") or ""),
+                "media_type": "movie",
+                "quality": quality,
+                "encoded_string": encoded,
+            }
+        else:
+            raise HTTPException(status_code=400, detail="No se pudo resolver metadata automáticamente para este archivo de serie. Verifica que el nombre contenga temporada/episodio o prueba otro resultado.")
+
+    # ensure stream points to skip channel message
+    encoded = await encode_string({"chat_id": channel_norm, "msg_id": skip_msg_id})
+    metadata_info["encoded_string"] = encoded
+    if payload.get("quality"):
+        metadata_info["quality"] = str(payload.get("quality")).strip() or metadata_info.get("quality") or resolved.get("quality") or "HD"
+    if not metadata_info.get("quality"):
+        metadata_info["quality"] = resolved.get("quality") or "HD"
+
+    # preserve split info if resolver detected
+    split_key = resolved.get("split_key")
+    if split_key:
+        metadata_info["group_key"] = metadata_info.get("group_key") or f"{channel_norm}:{metadata_info.get('quality')}:{split_key}"
+        if resolved.get("part_number") is not None:
+            metadata_info["part_number"] = resolved.get("part_number")
+
+    # try apply thumb from actual message
+    try:
+        msg_obj = await client.get_messages(skip_chat_id, skip_msg_id)
+        if msg_obj and not getattr(msg_obj, "empty", False):
+            await apply_video_thumb_to_metadata(metadata_info, msg_obj, encoded, client)
+    except Exception:
+        pass
+
+    title_clean = finalize_media_name(resolved.get("name") or title_src, bool(metadata_info.get("group_key")))
+    insert_status = {}
+    updated_id = await db.insert_media(
+        metadata_info,
+        channel=channel_norm,
+        msg_id=skip_msg_id,
+        size=resolved.get("size") or get_readable_file_size(int(resolved.get("raw_size") or item.get("file_size") or 0)),
+        name=title_clean,
+        raw_size=int(resolved.get("raw_size") or item.get("file_size") or 0),
+        status=insert_status,
+    )
+
+    if not updated_id:
+        raise HTTPException(status_code=500, detail="Failed to index the file with selected metadata.")
+
+    await db.resolve_skip_pending(pending_id)
+    start_single_media_catalog_sync(db, tmdb_id=metadata_info.get("tmdb_id"), media_type=metadata_info.get("media_type"))
+    return {
+        "status": "success",
+        "message": "Archivo indexado con la metadata seleccionada.",
+        "media_type": metadata_info.get("media_type"),
+        "tmdb_id": metadata_info.get("tmdb_id"),
+        "db_index": getattr(db, "current_db_index", 1),
+    }
+
+
+
+
+
+async def sync_skip_pending_api(limit: int = 100) -> dict:
+    settings = SettingsManager.current()
+    skip = settings.skip_channel
+    if not skip:
+        raise HTTPException(status_code=400, detail="No hay canal de skip configurado.")
+    client = _scan_client()
+    if client is None:
+        raise HTTPException(status_code=503, detail="No Telegram client is connected yet.")
+    skip_chat = int(skip) if str(skip).lstrip("-").replace("-100", "").isdigit() else skip
+    added = 0
+    scanned = 0
+    try:
+        async for msg in client.get_chat_history(skip_chat, limit=max(1, min(int(limit or 100), 500))):
+            scanned += 1
+            if not msg or getattr(msg, "empty", False):
+                continue
+            # only media-like messages
+            if not (msg.video or msg.document):
+                continue
+            # if it looks like a subtitle-only doc, skip? still allow assignment
+            chat_id = getattr(getattr(msg, "chat", None), "id", None) or (int(skip_chat) if str(skip_chat).lstrip("-").isdigit() else None)
+            if chat_id is None:
+                continue
+            pid = f"{int(chat_id)}:{int(msg.id)}"
+            existing = await db.get_skip_pending(pid)
+            if existing:
+                continue
+            from Backend.helper.skip_channel import record_skip_pending
+            await record_skip_pending(db, int(chat_id), int(msg.id), msg, reason="imported_from_skip_channel")
+            added += 1
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"No se pudo leer el canal de skip: {e}")
+    return {"status": "success", "message": f"Sincronizado: {added} nuevo(s) de {scanned} mensajes revisados.", "added": added, "scanned": scanned}
+
