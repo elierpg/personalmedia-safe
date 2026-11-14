@@ -611,15 +611,15 @@
                         </div>
                     </div>
                     <div id="ma-skip-selected" class="hidden" style="border:1px solid color-mix(in srgb,var(--primary) 35%,var(--border));border-radius:12px;padding:0.65rem 0.8rem;background:color-mix(in srgb,var(--primary) 8%,transparent)">
-                        <div class="flex items-start justify-between gap-2">
+                        <div class="flex items-start justify-between gap-2 mb-2">
                             <div class="min-w-0">
-                                <div class="text-xs font-semibold text-primary mb-0.5">Archivo seleccionado desde canal de skip</div>
-                                <div id="ma-skip-selected-name" class="text-sm font-semibold text-text truncate"></div>
-                                <div id="ma-skip-selected-meta" class="text-xs text-text-secondary"></div>
+                                <div class="text-xs font-semibold text-primary mb-0.5">Archivos seleccionados desde canal de skip</div>
+                                <div id="ma-skip-selected-summary" class="text-xs text-text-secondary"></div>
                             </div>
-                            <button type="button" onclick="maClearSkipSelection()" class="text-xs font-semibold text-red-300 shrink-0">Quitar</button>
+                            <button type="button" onclick="maClearSkipSelection()" class="text-xs font-semibold text-red-300 shrink-0">Quitar todos</button>
                         </div>
-                        <p class="text-xs text-text-secondary mt-1">Al añadir, el archivo se moverá del canal de skip al canal correspondiente y se renombrará con la metadata asignada.</p>
+                        <div id="ma-skip-selected-list" class="space-y-2"></div>
+                        <p class="text-xs text-text-secondary mt-1">Puedes seleccionar varios archivos del mismo título (distintas calidades o varios episodios). Al añadir, cada archivo se moverá del canal de skip al canal correspondiente y se renombrará con la metadata asignada.</p>
                     </div>
 
                     <div id="ma-link-source">
@@ -670,8 +670,10 @@
     let maType = mediaType;
     let maSelectedId = null;
     let maSearchList = [];
-    let maSkipPendingId = null;
+    let maSkipPendingId = null; // legacy compat
+    let maSkipPendingIds = [];
     let maSkipItems = [];
+    let maSelectedSkipItems = []; // [{item, quality, season, episode}]
 
     function maEsc(s) {
         return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -814,6 +816,15 @@
         return [...box.querySelectorAll('input:checked')].map(i => i.value);
     }
 
+    function maGuessEpisodeInfo(name) {
+        const n = String(name || '');
+        let m = n.match(/\bS(\d{1,2})[ ._-]?E(\d{1,3})\b/i);
+        if (m) return { season: parseInt(m[1],10), episode: parseInt(m[2],10) };
+        m = n.match(/\b(?:cap(?:[ií]tulo)?|episodio|ep\.?)?\s*(\d{1,2})x(\d{1,3})\b/i);
+        if (m) return { season: parseInt(m[1],10), episode: parseInt(m[2],10) };
+        return { season: null, episode: null };
+    }
+
     async function loadMaSkipItems() {
         const box = document.getElementById('ma-skip-list');
         if (!box) return;
@@ -830,9 +841,15 @@
             box.innerHTML = maSkipItems.map(it => {
                 const name = maEsc(it.file_name || it.caption || 'Archivo');
                 const meta = maEsc(`${(it.size || '')}${it.skip_msg_id ? ' · msg ' + it.skip_msg_id : ''}`);
-                return `<button type="button" onclick="maSelectSkipItem('${maEsc(it.id)}')" class="w-full text-left px-3 py-2 rounded-xl border border-hairline hover:border-primary/50 transition" style="background:var(--card)">
-                    <div class="text-sm font-semibold text-text truncate">${name}</div>
-                    <div class="text-xs text-text-secondary">${meta}</div>
+                const selected = maSkipPendingIds.includes(String(it.id));
+                return `<button type="button" onclick="maToggleSkipItem('${maEsc(it.id)}')" class="w-full text-left px-3 py-2 rounded-xl border transition ${selected ? 'border-primary/70' : 'border-hairline hover:border-primary/50'}" style="background:${selected ? 'color-mix(in srgb,var(--primary) 10%,var(--card))' : 'var(--card)'}">
+                    <div class="flex items-center gap-2">
+                        <span class="text-primary">${selected ? '<i class="fa-solid fa-square-check"></i>' : '<i class="fa-regular fa-square"></i>'}</span>
+                        <div class="min-w-0 flex-1">
+                            <div class="text-sm font-semibold text-text truncate">${name}</div>
+                            <div class="text-xs text-text-secondary">${meta}</div>
+                        </div>
+                    </div>
                 </button>`;
             }).join('');
         } catch (e) {
@@ -845,33 +862,103 @@
         if (!picker) return;
         const willShow = picker.classList.contains('hidden');
         picker.classList.toggle('hidden', !willShow);
-        if (willShow) loadMaSkipItems();
+        if (willShow) { maRenderSelectedSkipItems(); loadMaSkipItems(); }
     }
 
-    function maSelectSkipItem(id) {
-        const it = maSkipItems.find(x => String(x.id) === String(id));
-        if (!it) return;
-        maSkipPendingId = it.id;
-        document.getElementById('ma-skip-selected-name').textContent = it.file_name || it.caption || 'Archivo';
-        document.getElementById('ma-skip-selected-meta').textContent = `${it.size || ''}${it.skip_msg_id ? ' · skip msg ' + it.skip_msg_id : ''}`;
-        document.getElementById('ma-skip-selected').classList.remove('hidden');
-        document.getElementById('ma-skip-picker').classList.add('hidden');
-        document.getElementById('ma-link-source').classList.add('hidden');
-        // try to prefill title/name if empty
-        const t = document.getElementById('ma-m-title');
-        if (t && !t.value.trim()) {
-            const base = (it.file_name || '').replace(/\.[^.]+$/, '').replace(/[._]+/g, ' ').trim();
-            if (base) t.value = base;
+    function maRenderSelectedSkipItems() {
+        const wrap = document.getElementById('ma-skip-selected');
+        const list = document.getElementById('ma-skip-selected-list');
+        const summary = document.getElementById('ma-skip-selected-summary');
+        if (!wrap || !list) return;
+        maSkipPendingIds = maSelectedSkipItems.map(x => String(x.item.id));
+        maSkipPendingId = maSkipPendingIds[0] || null;
+        if (!maSelectedSkipItems.length) {
+            wrap.classList.add('hidden');
+            document.getElementById('ma-link-source').classList.remove('hidden');
+            return;
         }
-        const n = document.getElementById('ma-name');
-        if (n && !n.value.trim() && it.file_name) n.value = it.file_name;
+        wrap.classList.remove('hidden');
+        document.getElementById('ma-link-source').classList.add('hidden');
+        summary.textContent = `${maSelectedSkipItems.length} archivo(s) seleccionado(s)`;
+        const isTv = maType === 'tv';
+        const multi = maSelectedSkipItems.length > 1;
+        list.innerHTML = maSelectedSkipItems.map((sel, idx) => {
+            const it = sel.item;
+            const name = maEsc(it.file_name || it.caption || 'Archivo');
+            const meta = maEsc(`${(it.size || '')}${it.skip_msg_id ? ' · skip msg ' + it.skip_msg_id : ''}`);
+            let extra = '';
+            if (multi) {
+                if (isTv) {
+                    extra = `<div class="grid grid-cols-3 gap-2 mt-2">
+                        <div><label class="ma-label" style="margin-bottom:2px">Temp.</label><input class="ma-input" type="number" min="0" value="${sel.season ?? ''}" onchange="maUpdateSkipSel(${idx},'season',this.value)"></div>
+                        <div><label class="ma-label" style="margin-bottom:2px">Ep.</label><input class="ma-input" type="number" min="0" value="${sel.episode ?? ''}" onchange="maUpdateSkipSel(${idx},'episode',this.value)"></div>
+                        <div><label class="ma-label" style="margin-bottom:2px">Calidad</label><input class="ma-input" value="${maEsc(sel.quality || '')}" placeholder="1080p" onchange="maUpdateSkipSel(${idx},'quality',this.value)"></div>
+                    </div>`;
+                } else {
+                    extra = `<div class="mt-2"><label class="ma-label" style="margin-bottom:2px">Calidad</label><input class="ma-input" value="${maEsc(sel.quality || '')}" placeholder="1080p" onchange="maUpdateSkipSel(${idx},'quality',this.value)"></div>`;
+                }
+            }
+            return `<div class="px-3 py-2 rounded-xl border border-hairline" style="background:var(--card)">
+                <div class="flex items-start justify-between gap-2">
+                    <div class="min-w-0 flex-1">
+                        <div class="text-sm font-semibold text-text truncate">${name}</div>
+                        <div class="text-xs text-text-secondary">${meta}</div>
+                    </div>
+                    <button type="button" onclick="maRemoveSkipItem('${maEsc(String(it.id))}')" class="text-xs font-semibold text-red-300 shrink-0">Quitar</button>
+                </div>
+                ${extra}
+            </div>`;
+        }).join('');
+    }
+
+    function maUpdateSkipSel(idx, field, value) {
+        if (!maSelectedSkipItems[idx]) return;
+        if (field === 'season' || field === 'episode') {
+            maSelectedSkipItems[idx][field] = value === '' ? null : Number(value);
+        } else {
+            maSelectedSkipItems[idx][field] = value;
+        }
+    }
+
+    function maRemoveSkipItem(id) {
+        maSelectedSkipItems = maSelectedSkipItems.filter(x => String(x.item.id) !== String(id));
+        maRenderSelectedSkipItems();
+        loadMaSkipItems();
+    }
+
+    function maToggleSkipItem(id) {
+        const sid = String(id);
+        const idx = maSelectedSkipItems.findIndex(x => String(x.item.id) === sid);
+        if (idx >= 0) {
+            maSelectedSkipItems.splice(idx, 1);
+        } else {
+            const it = maSkipItems.find(x => String(x.id) === sid);
+            if (!it) return;
+            const baseName = (it.file_name || it.caption || '').replace(/\.[^.]+$/, '').replace(/[._]+/g, ' ').trim();
+            // Put selected skipped file text directly into search box (and prefill title if empty)
+            const sq = document.getElementById('ma-search-query');
+            if (sq) sq.value = baseName || (it.file_name || it.caption || '');
+            const t = document.getElementById('ma-m-title');
+            if (t && !t.value.trim() && baseName) t.value = baseName;
+            const n = document.getElementById('ma-name');
+            if (n && !n.value.trim() && it.file_name) n.value = it.file_name;
+            const g = maGuessEpisodeInfo(it.file_name || it.caption || '');
+            const q = maQuality() || '1080p';
+            maSelectedSkipItems.push({ item: it, quality: q, season: g.season, episode: g.episode });
+        }
+        maRenderSelectedSkipItems();
+        // keep picker open for multi-select but refresh highlights
+        loadMaSkipItems();
     }
 
     function maClearSkipSelection() {
+        maSelectedSkipItems = [];
+        maSkipPendingIds = [];
         maSkipPendingId = null;
-        document.getElementById('ma-skip-selected').classList.add('hidden');
+        maRenderSelectedSkipItems();
         document.getElementById('ma-link-source').classList.remove('hidden');
         maResetParts();
+        loadMaSkipItems();
     }
 
     function maResetParts() {
@@ -900,7 +987,9 @@
         maSetType(mediaType);
         ['ma-name','ma-season','ma-episode','ma-episode-title','ma-m-title','ma-m-year','ma-m-rating','ma-m-genres','ma-m-description','ma-m-poster','ma-m-backdrop','ma-quality-custom','ma-search-query'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
         maSkipPendingId = null;
+        maSkipPendingIds = [];
         maSkipItems = [];
+        maSelectedSkipItems = [];
         const skipSel = document.getElementById('ma-skip-selected'); if (skipSel) skipSel.classList.add('hidden');
         const skipPicker = document.getElementById('ma-skip-picker'); if (skipPicker) skipPicker.classList.add('hidden');
         const linkSrc = document.getElementById('ma-link-source'); if (linkSrc) linkSrc.classList.remove('hidden');
@@ -928,6 +1017,7 @@
         maType = type;
         document.querySelectorAll('[data-ma-type]').forEach(b => b.classList.toggle('active', b.dataset.maType === type));
         document.getElementById('ma-tv-fields').classList.toggle('hidden', type !== 'tv');
+        if (typeof maRenderSelectedSkipItems === 'function') maRenderSelectedSkipItems();
     }
 
     async function maResolve() {
@@ -981,27 +1071,109 @@
         const parts = maCollectParts();
         const quality = maQuality();
         const title = document.getElementById('ma-m-title').value.trim();
+        const hasSkip = maSelectedSkipItems.length > 0;
         if (!title) { showToast('Introduce un título.', 'error', 'Error'); return; }
-        if (!maSkipPendingId && !parts.length) { showToast('Selecciona un archivo del canal de skip o pega al menos un enlace de Telegram.', 'error', 'Error'); return; }
-        if (!quality) { showToast('Selecciona una calidad.', 'error', 'Error'); return; }
+        if (!hasSkip && !parts.length) { showToast('Selecciona uno o más archivos del canal de skip o pega al menos un enlace de Telegram.', 'error', 'Error'); return; }
+        if (!quality && !(hasSkip && maSelectedSkipItems.length > 1)) { showToast('Selecciona una calidad.', 'error', 'Error'); return; }
+
+        const baseManual = {
+            title,
+            year: document.getElementById('ma-m-year').value.trim(),
+            rate: document.getElementById('ma-m-rating').value.trim(),
+            genres: document.getElementById('ma-m-genres').value.trim(),
+            description: document.getElementById('ma-m-description').value.trim(),
+            poster: document.getElementById('ma-m-poster').value.trim(),
+            backdrop: document.getElementById('ma-m-backdrop').value.trim(),
+        };
+        const catalogIds = getMaSelectedCatalogIds();
+
+        if (hasSkip) {
+            // Validate per-item fields when multiple selected
+            if (maType === 'tv' && maSelectedSkipItems.length === 1) {
+                const sVal = document.getElementById('ma-season').value.trim();
+                const eVal = document.getElementById('ma-episode').value.trim();
+                if (sVal === '' || eVal === '') { showToast('Temporada y episodio son obligatorios.', 'error', 'Error'); return; }
+            }
+            if (maType === 'tv' && maSelectedSkipItems.length > 1) {
+                for (const sel of maSelectedSkipItems) {
+                    if (sel.season == null || sel.episode == null || sel.season === '' || sel.episode === '') {
+                        showToast('Indica temporada y episodio para cada archivo de serie seleccionado.', 'error', 'Error'); return;
+                    }
+                }
+            }
+            if (maSelectedSkipItems.length > 1) {
+                for (const sel of maSelectedSkipItems) {
+                    const q = (sel.quality || quality || '').trim();
+                    if (!q) { showToast('Indica una calidad para cada archivo seleccionado.', 'error', 'Error'); return; }
+                }
+            }
+
+            btn.disabled = true;
+            let ok = 0, fail = 0, lastErr = '', lastType = maType;
+            try {
+                for (let i = 0; i < maSelectedSkipItems.length; i++) {
+                    const sel = maSelectedSkipItems[i];
+                    const q = (sel.quality || quality || '1080p').trim();
+                    const payload = {
+                        media_type: maType,
+                        stream: { quality: q, name: (sel.item.file_name || undefined), parts: [] },
+                        catalog_ids: catalogIds,
+                        manual_metadata: { ...baseManual },
+                        skip_pending_id: String(sel.item.id),
+                    };
+                    if (maSelectedId) payload.selected_id = maSelectedId;
+                    if (maType === 'tv') {
+                        let sNum, eNum;
+                        if (maSelectedSkipItems.length === 1) {
+                            sNum = Number(document.getElementById('ma-season').value.trim());
+                            eNum = Number(document.getElementById('ma-episode').value.trim());
+                        } else {
+                            sNum = Number(sel.season);
+                            eNum = Number(sel.episode);
+                        }
+                        payload.season_number = sNum;
+                        payload.episode_number = eNum;
+                        if (maSelectedSkipItems.length === 1) {
+                            payload.episode_title = document.getElementById('ma-episode-title').value.trim() || undefined;
+                        }
+                    }
+                    try {
+                        const res = await fetch('/api/media/manual-add', {
+                            method: 'POST', headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify(payload)
+                        });
+                        const data = await res.json().catch(() => ({}));
+                        if (!res.ok) throw new Error(data.detail || 'No se pudo añadir el contenido');
+                        ok++; lastType = data.media_type || maType;
+                    } catch (e) {
+                        fail++; lastErr = e.message || 'Error';
+                    }
+                }
+                if (ok && !fail) {
+                    showToast(`${ok} archivo(s) añadidos correctamente.`, 'success', 'Añadido');
+                } else if (ok && fail) {
+                    showToast(`${ok} añadido(s), ${fail} con error: ${lastErr}`, 'warning', 'Parcial');
+                } else {
+                    throw new Error(lastErr || 'No se pudo añadir el contenido');
+                }
+                closeManualAdd();
+                if (lastType === mediaType) loadMedia(currentPage, currentSearch);
+            } catch (e) {
+                showToast(e.message || 'No se pudo añadir el contenido.', 'error', 'Error');
+            } finally {
+                btn.disabled = false;
+            }
+            return;
+        }
 
         const payload = {
             media_type: maType,
-            stream: { quality, name: document.getElementById('ma-name').value.trim() || undefined, parts: maSkipPendingId ? [] : parts },
-            catalog_ids: getMaSelectedCatalogIds(),
-            manual_metadata: {
-                title,
-                year: document.getElementById('ma-m-year').value.trim(),
-                rate: document.getElementById('ma-m-rating').value.trim(),
-                genres: document.getElementById('ma-m-genres').value.trim(),
-                description: document.getElementById('ma-m-description').value.trim(),
-                poster: document.getElementById('ma-m-poster').value.trim(),
-                backdrop: document.getElementById('ma-m-backdrop').value.trim(),
-            }
+            stream: { quality, name: document.getElementById('ma-name').value.trim() || undefined, parts: parts },
+            catalog_ids: catalogIds,
+            manual_metadata: { ...baseManual }
         };
 
         if (maSelectedId) payload.selected_id = maSelectedId;
-        if (maSkipPendingId) payload.skip_pending_id = maSkipPendingId;
 
         if (maType === 'tv') {
             const s = document.getElementById('ma-season').value.trim();
