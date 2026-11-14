@@ -507,6 +507,11 @@ class ScanManager:
                     is_supported = True
 
         if not is_supported:
+            # Try to delete non-video/text messages from the channel to keep it clean
+            try:
+                await message.delete()
+            except Exception as e:
+                LOGGER.warning(f"[ScanManager] Could not delete non-video message {getattr(message, 'id', '?')} in {chat_id}: {e}")
             s["counters"]["skipped_nonvid"] += 1
             return
 
