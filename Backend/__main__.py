@@ -53,14 +53,35 @@ async def start_services():
         if botmod.Userbot is None:
             stored_session = await get_active_session_string()
             if stored_session:
-                botmod.build_userbot(stored_session)
-                LOGGER.info("Loaded Userbot session from encrypted storage.")
+                try:
+                    botmod.build_userbot(stored_session)
+                    LOGGER.info("Loaded Userbot session from encrypted storage.")
+                except Exception as e:
+                    LOGGER.warning(f"Failed to build Userbot from stored session: {e}. Continuing without userbot.")
+                    botmod.Userbot = None
 
         if botmod.Userbot is not None:
-            await botmod.Userbot.start()
-            botmod.Userbot.username = botmod.Userbot.me.username
-            LOGGER.info(f"Userbot Client : [@{botmod.Userbot.username}]")
-        else:
+            try:
+                await botmod.Userbot.start()
+                botmod.Userbot.username = getattr(getattr(botmod.Userbot, "me", None), "username", None)
+                LOGGER.info(f"Userbot Client : [@{botmod.Userbot.username or 'connected'}]")
+            except Exception as e:
+                err = str(e).upper()
+                auth_invalid = "AUTH_KEY_UNREGISTERED" in err or "SESSION_REVOKED" in err or "USER_DEACTIVATED" in err or "AUTH_KEY_INVALID" in err
+                LOGGER.warning(f"Userbot session unavailable ({e}). {'Clearing stored session' if auth_invalid else 'Continuing without userbot'}.")
+                try:
+                    if botmod.Userbot is not None and getattr(botmod.Userbot, "is_connected", False):
+                        await botmod.Userbot.stop()
+                except Exception:
+                    pass
+                botmod.Userbot = None
+                if auth_invalid:
+                    try:
+                        await db.dbs["tracking"]["state"].delete_one({"_id": "user_session"})
+                        LOGGER.info("Invalid stored userbot session removed. Re-login from Settings.")
+                    except Exception as ce:
+                        LOGGER.warning(f"Could not clear invalid user session: {ce}")
+        if botmod.Userbot is None:
             LOGGER.info("Userbot not configured — running with StreamBot only.")
         await asyncio.sleep(1.2)
 
