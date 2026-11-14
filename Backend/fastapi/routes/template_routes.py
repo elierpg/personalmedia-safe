@@ -255,6 +255,13 @@ async def custom_catalogs_page(request: Request, _: bool = Depends(require_auth)
     return templates.TemplateResponse("custom_catalogs.html", ctx)
 
 
+#----- Review skip-pending files (full management)
+async def review_page(request: Request, _: bool = Depends(require_auth)):
+    ctx = _base_context(request)
+    ctx["current_user"] = get_current_user(request)
+    return templates.TemplateResponse("review.html", ctx)
+
+
 #----- Tools shell (WebUI replacement for scan/rescan/dbcheck commands)
 async def tools_page(request: Request, _: bool = Depends(require_auth)):
     ctx = _base_context(request)

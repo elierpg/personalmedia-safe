@@ -108,6 +108,8 @@ from Backend.fastapi.routes.api_routes import (
     delete_skip_pending_api,
     search_skip_pending_api,
     apply_skip_pending_api,
+    batch_apply_skip_pending_api,
+    batch_delete_skip_pending_api,
     sync_skip_pending_api,
 )
 from Backend.fastapi.routes.stream_routes import decay_client_failures
@@ -127,6 +129,7 @@ from Backend.fastapi.routes.template_routes import (
     settings_page,
     set_theme,
     tools_page,
+    review_page,
 )
 from Backend.fastapi.security.credentials import require_auth
 from Backend.pyrofork.bot import work_loads_summary
@@ -810,6 +813,11 @@ async def admin_restart(_: bool = Depends(require_auth)):
     return await restart_app_api()
 
 
+#----- Review skip-channel pending files
+@app.get("/admin/review", response_class=HTMLResponse)
+async def admin_review(request: Request, _: bool = Depends(require_auth)):
+    return await review_page(request, _)
+
 #----- Tools (WebUI replacement for /scan, /rescan, /dbcheck bot commands)
 @app.get("/admin/tools", response_class=HTMLResponse)
 async def admin_tools(request: Request, _: bool = Depends(require_auth)):
@@ -935,6 +943,14 @@ async def admin_apply_skip_pending(pending_id: str, payload: dict, _: bool = Dep
     return await apply_skip_pending_api(pending_id, payload)
 
 
+
+@app.post("/api/admin/skip-pending/batch-delete")
+async def admin_batch_delete_skip_pending(payload: dict, _: bool = Depends(require_auth)):
+    return await batch_delete_skip_pending_api(payload.get("pending_ids") or [])
+
+@app.post("/api/admin/skip-pending/batch-apply")
+async def admin_batch_apply_skip_pending(payload: dict, _: bool = Depends(require_auth)):
+    return await batch_apply_skip_pending_api(payload)
 
 @app.post("/api/admin/skip-pending/sync")
 async def admin_sync_skip_pending(payload: dict = None, _: bool = Depends(require_auth)):

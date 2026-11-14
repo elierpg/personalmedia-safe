@@ -3253,6 +3253,58 @@ async def apply_skip_pending_api(pending_id: str, payload: dict) -> dict:
 
 
 
+async def batch_delete_skip_pending_api(pending_ids: list[str]) -> dict:
+    if not isinstance(pending_ids, list) or not pending_ids:
+        raise HTTPException(status_code=400, detail="pending_ids is required")
+    ok_count = 0
+    fail = []
+    for pid in pending_ids:
+        try:
+            await delete_skip_pending_api(str(pid))
+            ok_count += 1
+        except Exception as e:
+            fail.append({"id": str(pid), "error": str(getattr(e, 'detail', e))})
+    return {
+        "status": "success" if not fail else "partial",
+        "message": f"{ok_count} eliminado(s), {len(fail)} con error." if fail else f"{ok_count} archivo(s) eliminados.",
+        "deleted": ok_count,
+        "errors": fail,
+    }
+
+
+async def batch_apply_skip_pending_api(payload: dict) -> dict:
+    pending_ids = payload.get("pending_ids") or []
+    if not isinstance(pending_ids, list) or not pending_ids:
+        raise HTTPException(status_code=400, detail="pending_ids is required")
+    selected_id = str(payload.get("selected_id") or "").strip()
+    media_type = _normalize_media_type(payload.get("media_type", "movie"))
+    if not selected_id:
+        raise HTTPException(status_code=400, detail="selected_id is required")
+
+    ok_count = 0
+    fail = []
+    for pid in pending_ids:
+        try:
+            item_payload = {
+                "selected_id": selected_id,
+                "media_type": media_type,
+            }
+            if payload.get("quality"):
+                item_payload["quality"] = payload.get("quality")
+            if payload.get("season") not in (None, ""):
+                item_payload["season"] = payload.get("season")
+            await apply_skip_pending_api(str(pid), item_payload)
+            ok_count += 1
+        except Exception as e:
+            fail.append({"id": str(pid), "error": str(getattr(e, 'detail', e))})
+    return {
+        "status": "success" if not fail else "partial",
+        "message": f"{ok_count} archivo(s) indexados, {len(fail)} con error." if fail else f"{ok_count} archivo(s) indexados correctamente.",
+        "applied": ok_count,
+        "errors": fail,
+    }
+
+
 async def sync_skip_pending_api(limit: int = 100) -> dict:
     settings = SettingsManager.current()
     skip = settings.skip_channel

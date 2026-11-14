@@ -1,0 +1,321 @@
+{% extends "base.html" %}
+{% block title %}Review — Mi Biblioteca{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-5">
+  <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+    <div>
+      <p class="text-xs font-semibold uppercase tracking-wider text-text-secondary mb-1">Revisión</p>
+      <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-text">Archivos en canal de skip</h1>
+      <p class="text-sm text-text-secondary mt-1">Revisa, asigna metadata en lote o elimina archivos pendientes del canal de skip.</p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <button type="button" onclick="loadSkipItems()" class="px-4 py-2.5 rounded-xl glass-panel border border-hairline text-text font-semibold text-sm"><i class="fa-solid fa-rotate"></i> Actualizar</button>
+      <button type="button" onclick="syncSkipItems()" class="px-4 py-2.5 rounded-xl bg-primary text-on-primary font-semibold text-sm"><i class="fa-solid fa-cloud-arrow-down"></i> Sincronizar desde canal</button>
+    </div>
+  </div>
+
+  <div class="glass-panel rounded-2xl border border-hairline p-4 sm:p-5 space-y-4">
+    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+      <div class="flex flex-wrap items-center gap-3">
+        <label class="inline-flex items-center gap-2 text-sm font-semibold text-text cursor-pointer">
+          <input id="select-all" type="checkbox" class="w-4 h-4 accent-[var(--primary)]" onchange="toggleSelectAll(this.checked)">
+          Seleccionar todo
+        </label>
+        <span id="selection-count" class="text-sm text-text-secondary">0 seleccionados</span>
+        <span id="items-count" class="text-sm text-text-secondary"></span>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" onclick="openBatchAssign()" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm disabled:opacity-40" id="btn-batch-assign" disabled><i class="fa-solid fa-wand-magic-sparkles"></i> Asignar metadata</button>
+        <button type="button" onclick="batchDeleteSelected()" class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-semibold text-sm disabled:opacity-40" id="btn-batch-delete" disabled><i class="fa-solid fa-trash"></i> Eliminar seleccionados</button>
+      </div>
+    </div>
+
+    <div id="review-status" class="text-sm text-text-secondary hidden"></div>
+    <div id="skip-items" class="space-y-2"></div>
+  </div>
+</div>
+
+<!-- Batch assign modal -->
+<div id="assign-modal" class="fixed inset-0 z-50 hidden" aria-modal="true" role="dialog">
+  <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeAssignModal()"></div>
+  <div class="absolute inset-0 flex items-start sm:items-center justify-center p-2 sm:p-4 overflow-y-auto">
+    <div class="glass-panel rounded-3xl w-full max-w-3xl my-4">
+      <div class="flex items-center justify-between gap-3 px-5 sm:px-6 py-4 border-b border-hairline">
+        <h2 class="text-lg sm:text-xl font-semibold text-text"><i class="fa-solid fa-wand-magic-sparkles text-emerald-400"></i> Asignar metadata a seleccionados</h2>
+        <button onclick="closeAssignModal()" class="icon-btn shrink-0" aria-label="Cerrar"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="px-5 sm:px-6 py-5 space-y-4 max-h-[75vh] overflow-y-auto">
+        <p id="assign-selected-info" class="text-sm text-text-secondary"></p>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wide text-text-secondary mb-1">Tipo</label>
+            <select id="as-type" class="w-full ma-input-like" onchange="clearAssignResults()">
+              <option value="movie">Película</option>
+              <option value="tv">Serie</option>
+            </select>
+          </div>
+          <div class="sm:col-span-2">
+            <label class="block text-xs font-semibold uppercase tracking-wide text-text-secondary mb-1">Calidad (opcional, aplica a todos)</label>
+            <input id="as-quality" class="w-full ma-input-like" placeholder="Detectada del archivo si se deja vacío (ej. 720p, 1080p)">
+          </div>
+        </div>
+
+        <div id="as-tv-hint" class="hidden text-xs text-text-secondary p-3 rounded-xl border border-hairline" style="background:var(--card)">
+          Para series, el episodio/temporada se intentará detectar del nombre de cada archivo. Si el nombre incluye <code>SxxExx</code> o <code>NxN</code>/“capítulo”, se asignará automáticamente por archivo.
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wide text-text-secondary mb-1">Buscar título (nombre, IMDb/TMDB ID o enlace)</label>
+          <div class="flex flex-col sm:flex-row gap-2">
+            <input id="as-query" class="w-full ma-input-like" placeholder="Ej. tt0133093, Leave the World Behind, ...">
+            <button type="button" onclick="searchAssignTitle()" class="px-4 py-2.5 rounded-xl bg-primary text-on-primary font-semibold text-sm shrink-0"><i class="fa-solid fa-magnifying-glass"></i> Buscar</button>
+          </div>
+          <p id="as-search-state" class="text-xs text-text-secondary mt-2 hidden"></p>
+          <div id="as-results" class="mt-3 space-y-2"></div>
+        </div>
+
+        <div id="as-picked" class="hidden p-3 rounded-xl border" style="border-color:color-mix(in srgb,var(--ok) 35%,var(--border));background:color-mix(in srgb,var(--ok) 10%,transparent)">
+          <div class="flex items-center justify-between gap-2">
+            <div>
+              <div class="text-xs font-semibold uppercase tracking-wide" style="color:var(--ok)">Seleccionado</div>
+              <div id="as-picked-title" class="text-sm font-semibold text-text"></div>
+              <div id="as-picked-meta" class="text-xs text-text-secondary"></div>
+            </div>
+            <button type="button" onclick="clearPicked()" class="text-xs font-semibold text-red-300">Cambiar</button>
+          </div>
+        </div>
+      </div>
+      <div class="flex flex-col sm:flex-row justify-end gap-3 px-5 sm:px-6 py-4 border-t border-hairline">
+        <button onclick="closeAssignModal()" class="px-5 py-2.5 rounded-2xl glass-panel border border-hairline text-text font-semibold text-sm">Cancelar</button>
+        <button id="as-submit" onclick="submitBatchAssign()" class="px-5 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm">Aplicar a seleccionados</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .ma-input-like { background: var(--background, var(--bg)); border: 1px solid var(--border); color: var(--text); border-radius: 0.9rem; padding: 0.7rem 0.9rem; font-size: 0.9rem; outline: none; }
+  .ma-input-like:focus { border-color: var(--primary); }
+  .skip-row { border: 1px solid var(--border); border-radius: 14px; padding: 0.75rem 0.85rem; background: color-mix(in srgb, var(--card) 96%, transparent); }
+  .skip-row.selected { border-color: color-mix(in srgb, var(--primary) 55%, var(--border)); background: color-mix(in srgb, var(--primary) 8%, var(--card)); }
+  .icon-btn { width: 2.25rem; height: 2.25rem; display: inline-flex; align-items: center; justify-content: center; border-radius: 0.75rem; border: 1px solid var(--border); background: var(--card); color: var(--text); }
+  .res-row { display:flex; gap:.75rem; align-items:center; padding:.6rem; border:1px solid var(--border); border-radius:.8rem; cursor:pointer; background:var(--card); }
+  .res-row:hover { border-color: var(--primary); }
+  .res-poster { width:2.5rem; height:3.6rem; object-fit:cover; border-radius:.4rem; background:var(--surface); flex-shrink:0; }
+</style>
+
+<script>
+  let skipItems = [];
+  let selectedIds = new Set();
+  let asResults = [];
+  let asPicked = null;
+
+  function esc(s){ return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  function updateSelectionUI(){
+    const count = selectedIds.size;
+    document.getElementById('selection-count').textContent = `${count} seleccionados`;
+    document.getElementById('btn-batch-assign').disabled = count === 0;
+    document.getElementById('btn-batch-delete').disabled = count === 0;
+    const all = document.getElementById('select-all');
+    if (all) {
+      all.checked = skipItems.length > 0 && count === skipItems.length;
+      all.indeterminate = count > 0 && count < skipItems.length;
+    }
+    renderItems();
+  }
+
+  function toggleSelectAll(checked){
+    selectedIds = checked ? new Set(skipItems.map(i => String(i.id))) : new Set();
+    updateSelectionUI();
+  }
+
+  function toggleItem(id, checked){
+    const sid = String(id);
+    if (checked) selectedIds.add(sid); else selectedIds.delete(sid);
+    updateSelectionUI();
+  }
+
+  function renderItems(){
+    const box = document.getElementById('skip-items');
+    if (!skipItems.length){
+      box.innerHTML = '<div class="text-sm text-text-secondary p-4 text-center">No hay archivos pendientes en el canal de skip.</div>';
+      document.getElementById('items-count').textContent = '';
+      return;
+    }
+    document.getElementById('items-count').textContent = `· ${skipItems.length} pendiente(s)`;
+    box.innerHTML = skipItems.map(it => {
+      const id = String(it.id);
+      const checked = selectedIds.has(id);
+      const name = esc(it.file_name || it.caption || 'Archivo');
+      const meta = esc([it.size, it.reason ? `motivo: ${it.reason}` : '', it.skip_msg_id ? `msg ${it.skip_msg_id}` : ''].filter(Boolean).join(' · '));
+      return `<div class="skip-row ${checked ? 'selected' : ''}">
+        <div class="flex items-start gap-3">
+          <input type="checkbox" class="w-4 h-4 mt-1 accent-[var(--primary)]" ${checked ? 'checked' : ''} onchange="toggleItem('${esc(id)}', this.checked)">
+          <div class="min-w-0 flex-1">
+            <div class="text-sm font-semibold text-text break-all">${name}</div>
+            <div class="text-xs text-text-secondary mt-0.5">${meta || '—'}</div>
+            ${it.caption && it.caption !== it.file_name ? `<div class="text-xs text-text-secondary mt-1 whitespace-pre-wrap break-all opacity-80">${esc(it.caption)}</div>` : ''}
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <button type="button" class="px-3 py-1.5 rounded-lg border border-hairline text-xs font-semibold text-text" onclick="prefillAssignFromItem('${esc(id)}')">Usar nombre</button>
+            <button type="button" class="px-3 py-1.5 rounded-lg border border-red-400/30 text-xs font-semibold text-red-300" onclick="deleteOne('${esc(id)}')"><i class="fa-solid fa-trash"></i></button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  async function loadSkipItems(){
+    const status = document.getElementById('review-status');
+    status.textContent = 'Cargando…'; status.classList.remove('hidden');
+    try {
+      const res = await fetch('/api/admin/skip-pending');
+      const data = await res.json().catch(()=>({}));
+      if (!res.ok) throw new Error(data.detail || 'No se pudo cargar');
+      skipItems = data.items || [];
+      // drop selections that no longer exist
+      const ids = new Set(skipItems.map(i=>String(i.id)));
+      selectedIds = new Set([...selectedIds].filter(id => ids.has(id)));
+      status.classList.add('hidden');
+      updateSelectionUI();
+    } catch(e){
+      status.textContent = e.message || 'Error al cargar.';
+      status.classList.remove('hidden');
+      showToast(e.message || 'Error al cargar.', 'error', 'Error');
+    }
+  }
+
+  async function syncSkipItems(){
+    const status = document.getElementById('review-status');
+    status.textContent = 'Sincronizando desde el canal de skip…'; status.classList.remove('hidden');
+    try {
+      const res = await fetch('/api/admin/skip-pending/sync', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({limit: 200}) });
+      const data = await res.json().catch(()=>({}));
+      if (!res.ok) throw new Error(data.detail || 'No se pudo sincronizar');
+      showToast(data.message || 'Sincronizado.', 'success', 'Sync');
+      await loadSkipItems();
+    } catch(e){
+      status.textContent = e.message || 'Error al sincronizar.';
+      showToast(e.message || 'Error al sincronizar.', 'error', 'Error');
+    }
+  }
+
+  async function deleteOne(id){
+    if (!confirm('¿Eliminar este archivo? Se eliminará de la lista y también de Telegram.')) return;
+    try {
+      const res = await fetch(`/api/admin/skip-pending/${encodeURIComponent(id)}`, { method:'DELETE' });
+      const data = await res.json().catch(()=>({}));
+      if (!res.ok) throw new Error(data.detail || 'No se pudo eliminar');
+      selectedIds.delete(String(id));
+      showToast(data.message || 'Eliminado.', 'success', 'Eliminar');
+      await loadSkipItems();
+    } catch(e){ showToast(e.message || 'No se pudo eliminar.', 'error', 'Error'); }
+  }
+
+  async function batchDeleteSelected(){
+    const ids = [...selectedIds];
+    if (!ids.length) return;
+    if (!confirm(`¿Eliminar ${ids.length} archivo(s) seleccionados? Se eliminarán de la lista y también de Telegram.`)) return;
+    try {
+      const res = await fetch('/api/admin/skip-pending/batch-delete', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ pending_ids: ids }) });
+      const data = await res.json().catch(()=>({}));
+      if (!res.ok) throw new Error(data.detail || 'No se pudo eliminar');
+      showToast(data.message || 'Eliminados.', data.status === 'success' ? 'success' : 'warning', 'Eliminar');
+      selectedIds.clear();
+      await loadSkipItems();
+    } catch(e){ showToast(e.message || 'No se pudo eliminar.', 'error', 'Error'); }
+  }
+
+  function prefillAssignFromItem(id){
+    const it = skipItems.find(x => String(x.id) === String(id));
+    if (!it) return;
+    const base = String(it.file_name || it.caption || '').replace(/\.[^.]+$/, '').replace(/[._-]+/g,' ').replace(/\s+/g,' ').trim();
+    if (!selectedIds.has(String(id))) { selectedIds.add(String(id)); updateSelectionUI(); }
+    openBatchAssign(base);
+  }
+
+  function openBatchAssign(prefillQuery){
+    if (!selectedIds.size) { showToast('Selecciona al menos un archivo.', 'error', 'Error'); return; }
+    document.getElementById('assign-selected-info').textContent = `${selectedIds.size} archivo(s) seleccionados para asignar metadata.`;
+    document.getElementById('as-query').value = prefillQuery || document.getElementById('as-query').value || '';
+    document.getElementById('as-tv-hint').classList.toggle('hidden', document.getElementById('as-type').value !== 'tv');
+    document.getElementById('assign-modal').classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeAssignModal(){ document.getElementById('assign-modal').classList.add('hidden'); document.body.style.overflow = ''; }
+  function clearAssignResults(){ asResults=[]; document.getElementById('as-results').innerHTML=''; document.getElementById('as-search-state').classList.add('hidden'); document.getElementById('as-tv-hint').classList.toggle('hidden', document.getElementById('as-type').value !== 'tv'); }
+  function clearPicked(){ asPicked=null; document.getElementById('as-picked').classList.add('hidden'); }
+
+  async function searchAssignTitle(){
+    const q = document.getElementById('as-query').value.trim();
+    const type = document.getElementById('as-type').value;
+    const state = document.getElementById('as-search-state');
+    const box = document.getElementById('as-results');
+    if (!q){ showToast('Introduce un nombre o ID/enlace de IMDb/TMDB.', 'error', 'Error'); return; }
+    state.textContent = 'Buscando…'; state.classList.remove('hidden'); box.innerHTML='';
+    try {
+      const params = new URLSearchParams({ media_type: type, query: q });
+      const res = await fetch(`/api/media/rescan/search?${params.toString()}`);
+      const data = await res.json().catch(()=>({}));
+      if (!res.ok) throw new Error(data.detail || 'Búsqueda fallida');
+      asResults = data.results || [];
+      if (!asResults.length){ state.textContent = 'Sin resultados.'; return; }
+      state.textContent = `${asResults.length} resultado(s). Selecciona el correcto:`;
+      box.innerHTML = asResults.map((r,i)=>`
+        <div class="res-row" onclick="pickAssignResult(${i})">
+          <img class="res-poster" src="${esc(r.poster || '/static/placeholder.svg')}" onerror="this.src='/static/placeholder.svg'">
+          <div class="min-w-0 flex-1">
+            <div class="text-sm font-semibold text-text truncate">${esc(r.title || 'Sin título')}</div>
+            <div class="text-xs text-text-secondary">${esc(r.year || '—')} · ${esc(r.source || '')} · ${esc(r.imdb_id || r.tmdb_id || '')}</div>
+          </div>
+        </div>`).join('');
+    } catch(e){ state.textContent = e.message || 'Error en la búsqueda.'; }
+  }
+
+  function pickAssignResult(i){
+    const r = asResults[i]; if (!r) return;
+    const selectedId = r.tmdb_id || r.imdb_id || r.selected_id;
+    if (!selectedId){ showToast('Resultado sin ID utilizable.', 'error', 'Error'); return; }
+    asPicked = { selectedId: String(selectedId), title: r.title || '', year: r.year || '', source: r.source || '' };
+    document.getElementById('as-picked-title').textContent = `${asPicked.title} ${asPicked.year ? '('+asPicked.year+')' : ''}`;
+    document.getElementById('as-picked-meta').textContent = `${asPicked.source} · ${asPicked.selectedId}`;
+    document.getElementById('as-picked').classList.remove('hidden');
+    showToast('Metadata seleccionada. Pulsa "Aplicar a seleccionados".', 'success', 'Selección');
+  }
+
+  async function submitBatchAssign(){
+    if (!asPicked){ showToast('Busca y selecciona primero la metadata correcta.', 'error', 'Error'); return; }
+    const ids = [...selectedIds];
+    if (!ids.length){ showToast('No hay archivos seleccionados.', 'error', 'Error'); return; }
+    const btn = document.getElementById('as-submit');
+    const payload = {
+      pending_ids: ids,
+      selected_id: asPicked.selectedId,
+      media_type: document.getElementById('as-type').value,
+      quality: document.getElementById('as-quality').value.trim() || undefined,
+    };
+    btn.disabled = true; btn.textContent = 'Aplicando…';
+    try {
+      const res = await fetch('/api/admin/skip-pending/batch-apply', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+      const data = await res.json().catch(()=>({}));
+      if (!res.ok) throw new Error(data.detail || 'No se pudo aplicar');
+      let msg = data.message || 'Aplicado.';
+      if (data.errors && data.errors.length){ msg += ' Revisa los archivos con error (pueden requerir T/E en el nombre para series).'; }
+      showToast(msg, data.status === 'success' ? 'success' : 'warning', 'Asignar metadata');
+      if (data.status === 'success') { selectedIds.clear(); closeAssignModal(); }
+      await loadSkipItems();
+    } catch(e){ showToast(e.message || 'No se pudo aplicar.', 'error', 'Error'); }
+    finally { btn.disabled = false; btn.textContent = 'Aplicar a seleccionados'; }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('as-type').addEventListener('change', () => {
+      document.getElementById('as-tv-hint').classList.toggle('hidden', document.getElementById('as-type').value !== 'tv');
+    });
+    loadSkipItems();
+  });
+</script>
+{% endblock %}
