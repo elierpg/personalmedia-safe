@@ -504,13 +504,18 @@
     <div class="settings-card">
         <h2><i class="fa-solid fa-user-lock"></i> Sesión de usuario de Telegram</h2>
         <p class="bk-desc">
-            Inicia sesión con tu número de teléfono para generar la sesión de usuario automáticamente, sin cadena de sesión manual.
-            Se guarda cifrada de forma segura y habilita la Búsqueda global.
+            Inicia sesión con tu número de teléfono para generar la sesión de usuario automáticamente. Se guarda cifrada y habilita la Búsqueda global.
         </p>
 
-        <div id="sess-loading" style="color:var(--text-sec);font-size:0.85rem">
+        <div class="flex flex-wrap gap-2 mb-3">
+            <button type="button" class="sess-btn" onclick="sessLoadStatus(true)"><i class="fa-solid fa-rotate"></i> Actualizar estado</button>
+            <button type="button" class="sess-btn primary" onclick="sessForceLogin()"><i class="fa-solid fa-right-to-bracket"></i> Iniciar sesión</button>
+        </div>
+
+        <div id="sess-loading" style="color:var(--text-sec);font-size:0.85rem;margin-bottom:.5rem">
             <i class="fa-solid fa-spinner fa-spin"></i> Comprobando sesión…
         </div>
+        <p id="sess-status-msg" style="font-size:0.82rem;color:var(--text-sec);display:none;margin-bottom:.5rem"></p>
 
         <!-- Connected view -->
         <div id="sess-connected" style="display:none">
@@ -532,6 +537,7 @@
                 <button type="button" class="sess-btn" onclick="sessAction('reconnect')"><i class="fa-solid fa-rotate"></i> Reconectar</button>
                 <button type="button" class="sess-btn warn" onclick="sessAction('disconnect')"><i class="fa-solid fa-plug-circle-xmark"></i> Desconectar</button>
                 <button type="button" class="sess-btn danger" onclick="sessRemove()"><i class="fa-solid fa-trash"></i> Eliminar</button>
+                <button type="button" class="sess-btn primary" onclick="sessForceLogin()"><i class="fa-solid fa-right-to-bracket"></i> Iniciar de nuevo</button>
             </div>
         </div>
 
@@ -1616,35 +1622,58 @@ async function restartApp() {
 /* ── Telegram User Session ─────────────────────────────────────────────── */
 let sessLoginId = null;
 
-async function sessLoadStatus() {
+async function sessLoadStatus(manual) {
     const loading = document.getElementById('sess-loading');
     const connected = document.getElementById('sess-connected');
     const login = document.getElementById('sess-login');
+    const statusMsg = document.getElementById('sess-status-msg');
     if (!loading) return;
+    loading.style.display = '';
+    loading.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Comprobando sesión…';
+    if (statusMsg) { statusMsg.style.display = 'none'; statusMsg.textContent = ''; }
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10000);
     try {
-        const res = await fetch('/api/admin/settings/session');
+        const res = await fetch('/api/admin/settings/session', { signal: controller.signal, credentials: 'same-origin' });
+        clearTimeout(timer);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
         const data = await res.json();
         loading.style.display = 'none';
-        if (data.connected && data.profile) {
-            const p = data.profile;
-            document.getElementById('sess-name').textContent = p.name || 'Usuario de Telegram';
+        if (data.connected) {
+            const p = data.profile || {};
+            document.getElementById('sess-name').textContent = p.name || 'Sesión guardada';
             document.getElementById('sess-username').textContent = p.username ? '@' + p.username : 'Sin nombre de usuario';
             document.getElementById('sess-phone').textContent = p.phone || '—';
             document.getElementById('sess-id').textContent = p.user_id || '—';
             const live = document.getElementById('sess-live');
             live.className = 'sess-pill ' + (data.live ? 'on' : 'off');
             live.textContent = data.live ? 'Conectada' : 'Guardada (reinicia para activar)';
-            connected.style.display = '';
-            login.style.display = 'none';
+            if (connected) connected.style.display = '';
+            // keep login hidden unless user asks to start new login
+            if (login) login.style.display = 'none';
         } else {
-            connected.style.display = 'none';
-            login.style.display = '';
-            sessShowStep('phone');
+            if (connected) connected.style.display = 'none';
+            sessForceLogin(true);
+            if (statusMsg) { statusMsg.style.display = ''; statusMsg.textContent = 'No hay sesión activa. Puedes iniciar sesión abajo.'; }
         }
     } catch (e) {
-        loading.textContent = 'No se pudo cargar el estado de la sesión.';
+        clearTimeout(timer);
+        loading.style.display = 'none';
+        if (statusMsg) { statusMsg.style.display = ''; statusMsg.textContent = 'No se pudo comprobar el estado (puede tardar o no responder). Puedes reintentar o iniciar sesión abajo.'; }
+        if (connected) connected.style.display = 'none';
+        sessForceLogin(true);
     }
 }
+
+function sessForceLogin(keepMsg) {
+    const login = document.getElementById('sess-login');
+    if (login) login.style.display = '';
+    sessShowStep('phone');
+    const msg = document.getElementById('sess-msg');
+    if (msg && !keepMsg) msg.style.display = 'none';
+}
+
 
 function sessShowStep(step) {
     document.getElementById('sess-step-phone').style.display = step === 'phone' ? '' : 'none';
@@ -1735,6 +1764,7 @@ async function sessRemove() {
    the base script that defines showToast is parsed after this block, so calling
    it at parse time would throw and abort the initial stats/log load. */
 window.addEventListener('DOMContentLoaded', () => {
+    if (typeof sessLoadStatus === 'function') sessLoadStatus();
     // Post-restart success notice (survives the reload) for ~8s
     if (sessionStorage.getItem('restartSuccess')) {
         sessionStorage.removeItem('restartSuccess');
@@ -1744,6 +1774,7 @@ window.addEventListener('DOMContentLoaded', () => {
     loadDbStats();
     loadLogs();
 });
+window.addEventListener('load', () => { if (typeof sessLoadStatus === 'function') sessLoadStatus(); });
 </script>
 
 {% endblock %}
