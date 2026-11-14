@@ -1151,9 +1151,19 @@ function clearSingleChannel(fieldId) {
     el.value = '';
     el.dataset.id = '';
     el.readOnly = false;
+    el.focus();
     const btn = document.getElementById(fieldId + '_clear');
     if (btn) btn.style.display = 'none';
     if (fieldId === 'skip_channel') toggleSkipDeleteField();
+}
+
+function syncSingleChannelField(fieldId) {
+    const el = document.getElementById(fieldId);
+    if (!el) return '';
+    if (el.readOnly && el.dataset.id) return el.dataset.id.trim();
+    const id = extractChannelId(el.value || '');
+    el.dataset.id = isValidChannelId(id) ? id : '';
+    return el.dataset.id || (el.value || '').trim();
 }
 
 function collectAnimeChannels() {
@@ -1213,27 +1223,27 @@ async function saveSettings() {
     ];
     const acEl = document.getElementById('announcement_channel');
     const scEl = document.getElementById('skip_channel');
-    const acId = (acEl.dataset.id || extractChannelId(acEl.value.trim()));
-    const scId = (scEl.dataset.id || extractChannelId(scEl.value.trim()));
+    const acId = syncSingleChannelField('announcement_channel');
+    const scId = syncSingleChannelField('skip_channel');
     if (acId) channelFields.push(acId);
     if (scId) channelFields.push(scId);
     for (const c of channelFields) {
         if (!isValidChannelId(c)) {
-            alert('Only channel IDs in -100xxxxxxxxxx format are accepted: ' + c);
+            showToast('Solo se aceptan IDs de canal en formato -100xxxxxxxxxx: ' + c, 'error', 'Error de validación');
             return;
         }
     }
     if (acEl.value.trim() && !acId) {
-        alert('Announcement channel must be -100xxxxxxxxxx format.');
+        showToast('El canal de anuncios debe tener formato -100xxxxxxxxxx.', 'error', 'Error de validación');
         return;
     }
     if (scEl.value.trim() && !scId) {
-        alert('Skip channel must be -100xxxxxxxxxx format.');
+        showToast('El canal de skip debe tener formato -100xxxxxxxxxx.', 'error', 'Error de validación');
         return;
     }
 
     btn.disabled  = true;
-    label.textContent = 'Saving…';
+    label.textContent = 'Guardando…';
 
     const payload = {
         replace_mode:                  document.getElementById('replace_mode').checked,
@@ -1269,8 +1279,8 @@ async function saveSettings() {
         global_search_channels:        collectList('global_search_channels'),
         manual_channels:               collectList('manual_channels'),
         announce_new_content:          document.getElementById('announce_new_content').checked,
-        announcement_channel:          (function(){const el=document.getElementById('announcement_channel');return el.dataset.id||extractChannelId(el.value.trim());})(),
-        skip_channel:                  (function(){const el=document.getElementById('skip_channel');return el.dataset.id||extractChannelId(el.value.trim());})(),
+        announcement_channel:          acId || '',
+        skip_channel:                  scId || '', 
         delete_on_metadata_fail:       document.getElementById('delete_on_metadata_fail').checked,
     };
     const dsEl = document.getElementById('default_streaming');
@@ -1285,7 +1295,7 @@ async function saveSettings() {
         const data = await res.json();
 
         if (res.ok) {
-            showToast('Settings saved successfully!', 'success', 'Saved');
+            showToast('Ajustes guardados correctamente.', 'success', 'Guardado');
 
             // Show reinit notices
             const reinit = data.reinit || {};
@@ -1299,14 +1309,14 @@ async function saveSettings() {
             // own (e.g. each database's live connection-status dot).
             await refreshSettingsFromServer();
         } else {
-            showToast(data.detail || 'Save failed', 'error', 'Error');
+            showToast(data.detail || 'No se pudieron guardar los ajustes.', 'error', 'Error al guardar');
         }
     } catch (err) {
-        showToast('Network error — could not reach server.', 'error', 'Error');
+        showToast('Error de red: no se pudo contactar con el servidor.', 'error', 'Error de red');
         console.error(err);
     } finally {
         btn.disabled  = false;
-        label.textContent = 'Save Settings';
+        label.textContent = 'Guardar ajustes';
     }
 }
 
@@ -1773,6 +1783,26 @@ window.addEventListener('DOMContentLoaded', () => {
     loadDbStats();
     loadLogs();
 });
+
+['announcement_channel','skip_channel'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', () => {
+        if (!el.readOnly) {
+            const cid = extractChannelId(el.value || '');
+            el.dataset.id = isValidChannelId(cid) ? cid : '';
+        }
+        if (id === 'skip_channel') toggleSkipDeleteField();
+    });
+    el.addEventListener('blur', () => {
+        if (!el.readOnly) {
+            const cid = extractChannelId(el.value || '');
+            if (isValidChannelId(cid)) { el.dataset.id = cid; el.value = cid; }
+        }
+        if (id === 'skip_channel') toggleSkipDeleteField();
+    });
+});
+
 window.addEventListener('load', () => { if (typeof sessLoadStatus === 'function') sessLoadStatus(); });
 </script>
 
