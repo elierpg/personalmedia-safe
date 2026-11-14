@@ -237,7 +237,7 @@ async def file_receive_handler(client: Client, message: Message):
         metadata_info = await metadata(clean_filename(title), int(channel), msg_id, override_id=override_id or extract_default_id(caption_with_links(message)), season_hint=season_hint)
         if metadata_info is None:
             LOGGER.warning(f"Metadata failed for file: {title} (ID: {msg_id})")
-            await route_to_skip_channel(client, message, db=db, reason="metadata_failed")
+            await route_to_skip_channel(client, message, db=db, reason="metadata_failed", index_placeholder=False)
             return
 
         title = _finalize_title(title, metadata_info)

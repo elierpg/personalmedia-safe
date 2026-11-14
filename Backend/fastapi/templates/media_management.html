@@ -597,13 +597,40 @@
 
                 <!-- Stream -->
                 <div class="space-y-3">
-                    <div class="flex items-center justify-between gap-2">
-                        <label class="ma-label" style="margin-bottom:0">Enlace(s) de reproducción *</label>
-                        <button type="button" onclick="maAddPart()" class="text-xs font-semibold text-primary shrink-0"><i class="fa-solid fa-plus"></i> Añadir parte dividida</button>
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <label class="ma-label" style="margin-bottom:0">Origen del archivo *</label>
+                        <button type="button" onclick="maToggleSkipPicker()" class="text-xs font-semibold text-primary shrink-0"><i class="fa-solid fa-inbox"></i> Seleccionar desde canal de skip</button>
                     </div>
-                    <div id="ma-parts" class="space-y-2"></div>
-                    <p class="text-xs text-text-secondary">Añade más partes solo para un archivo dividido (se unen en una reproducción, en orden).</p>
-                    <p id="ma-resolve-state" class="text-xs text-text-secondary hidden"></p>
+                    <div id="ma-skip-picker" class="hidden" style="border:1px solid var(--border);border-radius:12px;padding:0.75rem;background:color-mix(in srgb,var(--card) 92%,var(--bg))">
+                        <div class="flex items-center justify-between gap-2 mb-2">
+                            <span class="text-xs font-semibold text-text-secondary">Archivos pendientes en canal de skip</span>
+                            <button type="button" onclick="loadMaSkipItems()" class="text-xs font-semibold text-primary">Actualizar</button>
+                        </div>
+                        <div id="ma-skip-list" class="space-y-2" style="max-height:220px;overflow:auto">
+                            <p class="text-xs text-text-secondary">Cargando…</p>
+                        </div>
+                    </div>
+                    <div id="ma-skip-selected" class="hidden" style="border:1px solid color-mix(in srgb,var(--primary) 35%,var(--border));border-radius:12px;padding:0.65rem 0.8rem;background:color-mix(in srgb,var(--primary) 8%,transparent)">
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="min-w-0">
+                                <div class="text-xs font-semibold text-primary mb-0.5">Archivo seleccionado desde canal de skip</div>
+                                <div id="ma-skip-selected-name" class="text-sm font-semibold text-text truncate"></div>
+                                <div id="ma-skip-selected-meta" class="text-xs text-text-secondary"></div>
+                            </div>
+                            <button type="button" onclick="maClearSkipSelection()" class="text-xs font-semibold text-red-300 shrink-0">Quitar</button>
+                        </div>
+                        <p class="text-xs text-text-secondary mt-1">Al añadir, el archivo se moverá del canal de skip al canal correspondiente y se renombrará con la metadata asignada.</p>
+                    </div>
+
+                    <div id="ma-link-source">
+                        <div class="flex items-center justify-between gap-2 mb-2">
+                            <label class="ma-label" style="margin-bottom:0">Enlace(s) de reproducción *</label>
+                            <button type="button" onclick="maAddPart()" class="text-xs font-semibold text-primary shrink-0"><i class="fa-solid fa-plus"></i> Añadir parte dividida</button>
+                        </div>
+                        <div id="ma-parts" class="space-y-2"></div>
+                        <p class="text-xs text-text-secondary">Añade más partes solo para un archivo dividido (se unen en una reproducción, en orden).</p>
+                        <p id="ma-resolve-state" class="text-xs text-text-secondary hidden"></p>
+                    </div>
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div>
                             <label class="ma-label">Calidad *</label>
@@ -643,6 +670,8 @@
     let maType = mediaType;
     let maSelectedId = null;
     let maSearchList = [];
+    let maSkipPendingId = null;
+    let maSkipItems = [];
 
     function maEsc(s) {
         return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -785,6 +814,66 @@
         return [...box.querySelectorAll('input:checked')].map(i => i.value);
     }
 
+    async function loadMaSkipItems() {
+        const box = document.getElementById('ma-skip-list');
+        if (!box) return;
+        box.innerHTML = '<p class="text-xs text-text-secondary">Cargando…</p>';
+        try {
+            const res = await fetch('/api/admin/skip-pending');
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.detail || 'No se pudo cargar');
+            maSkipItems = data.items || [];
+            if (!maSkipItems.length) {
+                box.innerHTML = '<p class="text-xs text-text-secondary">No hay archivos pendientes en el canal de skip. (Al escanear/indexar, los fallos de metadata se copian allí y quedan disponibles.)</p>';
+                return;
+            }
+            box.innerHTML = maSkipItems.map(it => {
+                const name = maEsc(it.file_name || it.caption || 'Archivo');
+                const meta = maEsc(`${(it.size || '')}${it.skip_msg_id ? ' · msg ' + it.skip_msg_id : ''}`);
+                return `<button type="button" onclick="maSelectSkipItem('${maEsc(it.id)}')" class="w-full text-left px-3 py-2 rounded-xl border border-hairline hover:border-primary/50 transition" style="background:var(--card)">
+                    <div class="text-sm font-semibold text-text truncate">${name}</div>
+                    <div class="text-xs text-text-secondary">${meta}</div>
+                </button>`;
+            }).join('');
+        } catch (e) {
+            box.innerHTML = `<p class="text-xs text-red-300">${maEsc(e.message || 'Error al cargar')}</p>`;
+        }
+    }
+
+    function maToggleSkipPicker() {
+        const picker = document.getElementById('ma-skip-picker');
+        if (!picker) return;
+        const willShow = picker.classList.contains('hidden');
+        picker.classList.toggle('hidden', !willShow);
+        if (willShow) loadMaSkipItems();
+    }
+
+    function maSelectSkipItem(id) {
+        const it = maSkipItems.find(x => String(x.id) === String(id));
+        if (!it) return;
+        maSkipPendingId = it.id;
+        document.getElementById('ma-skip-selected-name').textContent = it.file_name || it.caption || 'Archivo';
+        document.getElementById('ma-skip-selected-meta').textContent = `${it.size || ''}${it.skip_msg_id ? ' · skip msg ' + it.skip_msg_id : ''}`;
+        document.getElementById('ma-skip-selected').classList.remove('hidden');
+        document.getElementById('ma-skip-picker').classList.add('hidden');
+        document.getElementById('ma-link-source').classList.add('hidden');
+        // try to prefill title/name if empty
+        const t = document.getElementById('ma-m-title');
+        if (t && !t.value.trim()) {
+            const base = (it.file_name || '').replace(/\.[^.]+$/, '').replace(/[._]+/g, ' ').trim();
+            if (base) t.value = base;
+        }
+        const n = document.getElementById('ma-name');
+        if (n && !n.value.trim() && it.file_name) n.value = it.file_name;
+    }
+
+    function maClearSkipSelection() {
+        maSkipPendingId = null;
+        document.getElementById('ma-skip-selected').classList.add('hidden');
+        document.getElementById('ma-link-source').classList.remove('hidden');
+        maResetParts();
+    }
+
     function maResetParts() {
         document.getElementById('ma-parts').innerHTML =
             `<div class="flex flex-col sm:flex-row gap-2" data-part>
@@ -810,6 +899,11 @@
     function openManualAdd() {
         maSetType(mediaType);
         ['ma-name','ma-season','ma-episode','ma-episode-title','ma-m-title','ma-m-year','ma-m-rating','ma-m-genres','ma-m-description','ma-m-poster','ma-m-backdrop','ma-quality-custom','ma-search-query'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+        maSkipPendingId = null;
+        maSkipItems = [];
+        const skipSel = document.getElementById('ma-skip-selected'); if (skipSel) skipSel.classList.add('hidden');
+        const skipPicker = document.getElementById('ma-skip-picker'); if (skipPicker) skipPicker.classList.add('hidden');
+        const linkSrc = document.getElementById('ma-link-source'); if (linkSrc) linkSrc.classList.remove('hidden');
         maResetParts();
         document.getElementById('ma-quality').value = '1080p';
         document.getElementById('ma-quality-custom').classList.add('hidden');
@@ -888,12 +982,12 @@
         const quality = maQuality();
         const title = document.getElementById('ma-m-title').value.trim();
         if (!title) { showToast('Introduce un título.', 'error', 'Error'); return; }
-        if (!parts.length) { showToast('Pega al menos un enlace de mensaje de Telegram.', 'error', 'Error'); return; }
+        if (!maSkipPendingId && !parts.length) { showToast('Selecciona un archivo del canal de skip o pega al menos un enlace de Telegram.', 'error', 'Error'); return; }
         if (!quality) { showToast('Selecciona una calidad.', 'error', 'Error'); return; }
 
         const payload = {
             media_type: maType,
-            stream: { quality, name: document.getElementById('ma-name').value.trim() || undefined, parts },
+            stream: { quality, name: document.getElementById('ma-name').value.trim() || undefined, parts: maSkipPendingId ? [] : parts },
             catalog_ids: getMaSelectedCatalogIds(),
             manual_metadata: {
                 title,
@@ -907,6 +1001,7 @@
         };
 
         if (maSelectedId) payload.selected_id = maSelectedId;
+        if (maSkipPendingId) payload.skip_pending_id = maSkipPendingId;
 
         if (maType === 'tv') {
             const s = document.getElementById('ma-season').value.trim();

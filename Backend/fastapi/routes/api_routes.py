@@ -1179,33 +1179,62 @@ async def manual_add_media_api(payload: dict) -> dict:
     if not quality:
         raise HTTPException(status_code=400, detail="A quality label (e.g. 1080p) is required.")
 
-    #----- One source = single file, multiple sources = split file parts (in order)
-    part_sources = stream.get("parts")
-    if not isinstance(part_sources, list) or not part_sources:
-        part_sources = [{"url": stream.get("url"), "chat_id": stream.get("chat_id"), "msg_id": stream.get("msg_id")}]
-    part_sources = [p for p in part_sources if p and (p.get("url") or (p.get("chat_id") and p.get("msg_id")))]
-    if not part_sources:
-        raise HTTPException(status_code=400, detail="Provide at least one Telegram message link.")
-
     client = _scan_client()
     if client is None:
         raise HTTPException(status_code=503, detail="No Telegram client is connected yet.")
 
-    resolved_parts = []
-    for src in part_sources:
-        try:
-            resolved_parts.append(await resolve_telegram_message(
-                client, url=src.get("url"), chat_id=src.get("chat_id"), msg_id=src.get("msg_id"),
-            ))
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc))
-        except Exception as exc:
-            raise HTTPException(status_code=500, detail=f"Could not read that message: {exc}")
+    skip_pending_id = str(payload.get("skip_pending_id") or "").strip()
+    pending_item = None
+    dest_chat_full = None
 
-    primary = resolved_parts[0]
-    is_split = len(resolved_parts) > 1
-    raw_name = (stream.get("name") or primary["name"]).strip()
-    name = strip_part_suffix(raw_name) if is_split else raw_name
+    if skip_pending_id:
+        pending_item = await db.get_skip_pending(skip_pending_id)
+        if not pending_item:
+            raise HTTPException(status_code=404, detail="El archivo pendiente del canal de skip no fue encontrado.")
+        # Determine destination ("canal correspondiente"): prefer source channel, fallback to first auth channel
+        settings = SettingsManager.current()
+        auth_norms = {str(c).replace("-100", "").lstrip("@") for c in (settings.auth_channels or [])}
+        src = pending_item.get("source_chat_id")
+        dest_norm = None
+        if src is not None:
+            src_norm = str(src).replace("-100", "").lstrip("@")
+            if src_norm in auth_norms or auth_norms == set():
+                dest_norm = src_norm
+        if dest_norm is None and settings.auth_channels:
+            dest_norm = str(settings.auth_channels[0]).replace("-100", "").lstrip("@")
+        if not dest_norm:
+            raise HTTPException(status_code=400, detail="No hay un canal de destino configurado (AUTH) para mover el archivo.")
+        dest_chat_full = int(f"-100{dest_norm}")
+        # resolved_parts will be filled after metadata base is known (to set caption) - use skip as temp source
+        resolved_parts = []
+        primary = None
+        is_split = False
+        raw_name = str(pending_item.get("file_name") or "file")
+        name = raw_name
+    else:
+        #----- One source = single file, multiple sources = split file parts (in order)
+        part_sources = stream.get("parts")
+        if not isinstance(part_sources, list) or not part_sources:
+            part_sources = [{"url": stream.get("url"), "chat_id": stream.get("chat_id"), "msg_id": stream.get("msg_id")}]
+        part_sources = [p for p in part_sources if p and (p.get("url") or (p.get("chat_id") and p.get("msg_id")))]
+        if not part_sources:
+            raise HTTPException(status_code=400, detail="Provide at least one Telegram message link.")
+
+        resolved_parts = []
+        for src in part_sources:
+            try:
+                resolved_parts.append(await resolve_telegram_message(
+                    client, url=src.get("url"), chat_id=src.get("chat_id"), msg_id=src.get("msg_id"),
+                ))
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc))
+            except Exception as exc:
+                raise HTTPException(status_code=500, detail=f"Could not read that message: {exc}")
+
+        primary = resolved_parts[0]
+        is_split = len(resolved_parts) > 1
+        raw_name = (stream.get("name") or primary["name"]).strip()
+        name = strip_part_suffix(raw_name) if is_split else raw_name
 
     #----- Resolve the title-level metadata: existing doc, TMDB/IMDb pick, or manual entry
     tmdb_id = payload.get("tmdb_id")
@@ -1230,7 +1259,10 @@ async def manual_add_media_api(payload: dict) -> dict:
         if not base["title"]:
             raise HTTPException(status_code=400, detail="A title is required for manual entry.")
         if not base["year"]:
-            base["year"] = int(primary.get("upload_year") or 0)
+            if pending_item:
+                base["year"] = 0
+            else:
+                base["year"] = int(primary.get("upload_year") or 0)
 
     #----- Brand-new hand-made titles get a negative synthetic id (never collides with TMDB)
     if not base.get("tmdb_id"):
@@ -1239,6 +1271,42 @@ async def manual_add_media_api(payload: dict) -> dict:
     if not base.get("imdb_id"):
         base["imdb_id"] = f"tg{abs(int(base['tmdb_id']))}"
     _fill_placeholder_metadata(base)
+
+    #----- If coming from skip channel: move file to destination channel with metadata title/caption, then use as source
+    if skip_pending_id and pending_item:
+        try:
+            skip_chat_id = int(pending_item.get("skip_chat_id"))
+            skip_msg_id = int(pending_item.get("skip_msg_id"))
+            caption_title = base.get("title") or raw_name
+            link = build_id_link(base.get("imdb_id"), base.get("tmdb_id"), media_type)
+            if link:
+                tag = f'<a href="{link}">{"IMDB" if "imdb.com" in link else "TMDB"}</a>'
+                caption = f"{caption_title}\n{tag}"
+            else:
+                caption = str(caption_title)
+            copied_msg = await client.copy_message(
+                chat_id=dest_chat_full,
+                from_chat_id=skip_chat_id,
+                message_id=skip_msg_id,
+                caption=caption,
+            )
+            if copied_msg is None:
+                raise HTTPException(status_code=500, detail="No se pudo mover el archivo al canal de destino.")
+            new_chat = getattr(getattr(copied_msg, "chat", None), "id", dest_chat_full)
+            resolved_parts = [await resolve_telegram_message(client, chat_id=str(new_chat), msg_id=int(copied_msg.id))]
+            primary = resolved_parts[0]
+            is_split = False
+            raw_name = (stream.get("name") or primary.get("name") or caption_title).strip()
+            name = raw_name
+            # remove from skip channel
+            try:
+                await client.delete_messages(skip_chat_id, skip_msg_id)
+            except Exception as e:
+                LOGGER.warning(f"[ManualAdd] Could not delete skip-channel message {skip_msg_id}: {e}")
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"No se pudo mover/indexar el archivo desde el canal de skip: {exc}")
 
     thumb_url = ""
     if primary.get("has_thumb"):
@@ -1333,7 +1401,18 @@ async def manual_add_media_api(payload: dict) -> dict:
         except Exception:
             pass
 
+    if skip_pending_id and pending_item:
+        try:
+            await db.resolve_skip_pending(skip_pending_id)
+        except Exception:
+            try:
+                await db.remove_skip_pending(skip_pending_id)
+            except Exception:
+                pass
+
     message = f"Split stream added ({len(resolved_parts)} parts)." if is_split else "Stream added successfully."
+    if skip_pending_id:
+        message = "Archivo movido desde el canal de skip e indexado con la metadata asignada."
     if catalogs_added:
         message += f" Added to: {', '.join(catalogs_added)}."
     return {

@@ -499,7 +499,7 @@ class ScanManager:
         if metadata_info is None:
             s["counters"]["skipped_meta"] += 1
             try:
-                await route_to_skip_channel(client, message, db=self._db, reason="metadata_failed")
+                await route_to_skip_channel(client, message, db=self._db, reason="metadata_failed", index_placeholder=False)
             except Exception as e:
                 LOGGER.warning(f"[ScanManager] Skip-channel route failed for msg {msg_id}: {e}")
             return
