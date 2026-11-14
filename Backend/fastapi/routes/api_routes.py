@@ -30,8 +30,10 @@ from Backend.helper.backup import export_config, import_config
 from Backend.helper.custom_dl import ACTIVE_STREAMS, RECENT_STREAMS, ByteStreamer, _speed_test_single_client, run_speed_test
 from Backend.helper.encrypt import decode_string, encode_string
 from Backend.helper.health import run_health_checks
+from Backend.helper.task_manager import edit_message
 from Backend.helper.manual_add import resolve_telegram_message, retag_media, stamp_caption_by_ref
 from Backend.helper.pyro import resolve_video_thumb_url
+from Backend.helper.metadata.entry import caption_with_id
 from Backend.helper.metadata import (
     build_id_link,
     extract_default_id,
@@ -1277,13 +1279,36 @@ async def manual_add_media_api(payload: dict) -> dict:
         try:
             skip_chat_id = int(pending_item.get("skip_chat_id"))
             skip_msg_id = int(pending_item.get("skip_msg_id"))
-            caption_title = base.get("title") or raw_name
+
+            # Build a canonical, parseable caption so the bot can index it on its own
+            m_title = (base.get("title") or raw_name or "file").strip()
+            m_year = base.get("year") or 0
+            m_quality = quality or "HD"
+            canonical_base = m_title
+            if media_type == "tv":
+                try:
+                    sn = payload.get("season_number")
+                    en = payload.get("episode_number")
+                    if sn not in (None, "") and en not in (None, ""):
+                        canonical_base = f"{m_title} S{int(sn):02d}E{int(en):02d} {m_quality}".strip()
+                    elif m_year:
+                        canonical_base = f"{m_title} ({m_year}) {m_quality}".strip()
+                    else:
+                        canonical_base = f"{m_title} {m_quality}".strip()
+                except Exception:
+                    canonical_base = f"{m_title} {m_quality}".strip()
+            else:
+                canonical_base = f"{m_title} ({m_year}) {m_quality}".strip() if m_year else f"{m_title} {m_quality}".strip()
+            if not canonical_base.strip():
+                canonical_base = str(raw_name or "file")
+
             link = build_id_link(base.get("imdb_id"), base.get("tmdb_id"), media_type)
             if link:
                 tag = f'<a href="{link}">{"IMDB" if "imdb.com" in link else "TMDB"}</a>'
-                caption = f"{caption_title}\n{tag}"
+                caption = f"{canonical_base}\n{tag}"
             else:
-                caption = str(caption_title)
+                caption = canonical_base
+
             copied_msg = await client.copy_message(
                 chat_id=dest_chat_full,
                 from_chat_id=skip_chat_id,
@@ -1296,7 +1321,7 @@ async def manual_add_media_api(payload: dict) -> dict:
             resolved_parts = [await resolve_telegram_message(client, chat_id=str(new_chat), msg_id=int(copied_msg.id))]
             primary = resolved_parts[0]
             is_split = False
-            raw_name = (stream.get("name") or primary.get("name") or caption_title).strip()
+            raw_name = (stream.get("name") or canonical_base).strip()
             name = raw_name
             # remove from skip channel
             try:
@@ -3052,7 +3077,39 @@ async def apply_skip_pending_api(pending_id: str, payload: dict) -> dict:
     except Exception:
         pass
 
-    title_clean = finalize_media_name(resolved.get("name") or title_src, bool(metadata_info.get("group_key")))
+    # Build a canonical, parseable caption/name so the file can be indexed by the bot itself
+    try:
+        m_title = (metadata_info.get("title") or "").strip()
+        m_year = metadata_info.get("year") or metadata_info.get("release_year") or 0
+        m_quality = (metadata_info.get("quality") or resolved.get("quality") or payload.get("quality") or "HD").strip()
+        season_n = metadata_info.get("season_number")
+        if season_n is None:
+            season_n = metadata_info.get("season")
+        episode_n = metadata_info.get("episode_number")
+        if episode_n is None:
+            episode_n = metadata_info.get("episode")
+        if metadata_info.get("media_type") == "tv" and season_n not in (None, "") and episode_n not in (None, ""):
+            try:
+                canonical_base = f"{m_title} S{int(season_n):02d}E{int(episode_n):02d} {m_quality}".strip()
+            except Exception:
+                canonical_base = f"{m_title} ({m_year}) {m_quality}".strip() if m_year else f"{m_title} {m_quality}".strip()
+        else:
+            canonical_base = f"{m_title} ({m_year}) {m_quality}".strip() if m_year else f"{m_title} {m_quality}".strip()
+        if not canonical_base.strip():
+            canonical_base = (resolved.get("name") or title_src or "file").strip()
+        canonical_caption = caption_with_id(canonical_base, metadata_info) or canonical_base
+        try:
+            await edit_message(skip_chat_id, skip_msg_id, canonical_caption)
+        except Exception:
+            # fallback to stamping helper (may preserve old base but adds id)
+            try:
+                await stamp_caption_by_ref(client, channel_norm, skip_msg_id, metadata_info)
+            except Exception:
+                pass
+        title_clean = finalize_media_name(canonical_base, bool(metadata_info.get("group_key")))
+    except Exception:
+        title_clean = finalize_media_name(resolved.get("name") or title_src, bool(metadata_info.get("group_key")))
+
     insert_status = {}
     updated_id = await db.insert_media(
         metadata_info,
@@ -3071,7 +3128,7 @@ async def apply_skip_pending_api(pending_id: str, payload: dict) -> dict:
     start_single_media_catalog_sync(db, tmdb_id=metadata_info.get("tmdb_id"), media_type=metadata_info.get("media_type"))
     return {
         "status": "success",
-        "message": "Archivo indexado con la metadata seleccionada.",
+        "message": "Archivo indexado y renombrado con metadata adecuada.",
         "media_type": metadata_info.get("media_type"),
         "tmdb_id": metadata_info.get("tmdb_id"),
         "db_index": getattr(db, "current_db_index", 1),
