@@ -51,6 +51,7 @@ class ScanManager:
         self._db = None
         self._task: Optional[asyncio.Task] = None
         self._cancel = False
+        self._pause = False
         self._lock = asyncio.Lock()
         self._db_lock = asyncio.Lock()
         self.state: Dict[str, Any] = self._blank_state()
@@ -243,6 +244,7 @@ class ScanManager:
             self.state["finished_at"] = 0.0
             self.state["started_at"] = _now()
             self._cancel = False
+            self._pause = False
             await self._persist()
 
             self._task = asyncio.create_task(self._run(client))
@@ -250,14 +252,26 @@ class ScanManager:
                     "status": self.get_status()}
 
     async def cancel(self) -> Dict[str, Any]:
+        # Backward-compatible: treat cancel as stop
+        return await self.stop()
+
+    async def pause(self) -> Dict[str, Any]:
+        if self.state["status"] != "running":
+            return {"ok": False, "message": "No scan is currently running."}
+        self._pause = True
+        self._cancel = False
+        return {"ok": True, "message": "Pause requested — the scan will pause after the current batch."}
+
+    async def stop(self) -> Dict[str, Any]:
         if self.state["status"] != "running":
             return {"ok": False, "message": "No scan is currently running."}
         self._cancel = True
-        return {"ok": True, "message": "Stop requested — the scan will pause after the current batch."}
+        self._pause = False
+        return {"ok": True, "message": "Stop requested — the scan will be cancelled after the current batch."}
 
     async def _run(self, client) -> None:
         try:
-            while self.state["pending"] and not self._cancel:
+            while self.state["pending"] and not self._cancel and not self._pause:
                 ch = self.state["pending"][0]
                 try:
                     ch_id = int(ch)
@@ -268,22 +282,30 @@ class ScanManager:
                     continue
 
                 completed = await self._scan_channel(client, ch_id, ch)
-                if self._cancel:
+                if self._cancel or self._pause:
                     break
                 if completed:
                     if self.state["pending"] and self.state["pending"][0] == ch:
                         self.state["pending"].pop(0)
                     await self._persist()
 
-            if self._cancel:
+            if self._pause:
+                self.state["status"] = "paused"
+                LOGGER.info("[ScanManager] Scan paused by user (resumable).")
+            elif self._cancel:
                 self.state["status"] = "cancelled"
-                LOGGER.info("[ScanManager] Scan cancelled by user (resumable).")
+                self.state["pending"] = []
+                self.state["current_channel"] = None
+                self.state["current_channel_name"] = ""
+                LOGGER.info("[ScanManager] Scan stopped/cancelled by user.")
             else:
                 self.state["status"] = "completed"
                 self.state["current_channel"] = None
                 self.state["current_channel_name"] = ""
                 LOGGER.info("[ScanManager] Scan completed.")
             self.state["finished_at"] = _now()
+            self._pause = False
+            self._cancel = False
             await self._persist()
 
         except (ChannelPrivate, ChatAdminRequired) as e:
@@ -337,7 +359,7 @@ class ScanManager:
         empty_streak = 0
         batch_count = 0
 
-        while not self._cancel and current < SCAN_MAX_ID_CAP:
+        while not self._cancel and not self._pause and current < SCAN_MAX_ID_CAP:
             #----- ── Stop condition ───────────────────────────────────────────────
             if use_probe:
                 if current > last_id:
@@ -389,14 +411,14 @@ class ScanManager:
 
                 async def _worker(msg):
                     async with sem:
-                        if self._cancel:
+                        if self._cancel or self._pause:
                             return
                         await self._process_message(client, msg, chat_id)
                         s["counters"]["processed"] += 1
 
                 await asyncio.gather(*(_worker(m) for m in to_process))
 
-            if self._cancel:
+            if self._cancel or self._pause:
                 s["cursors"][str(ch_key)] = current
                 s["current_id"] = current
                 await self._persist()

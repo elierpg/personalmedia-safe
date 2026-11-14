@@ -2320,7 +2320,12 @@ async def start_scan_api(payload: dict) -> dict:
 
 
 async def cancel_scan_api() -> dict:
-    result = await scan_manager.cancel()
+    result = await scan_manager.stop()
+    return {"status": "success" if result.get("ok") else "error", **result}
+
+
+async def pause_scan_api() -> dict:
+    result = await scan_manager.pause()
     return {"status": "success" if result.get("ok") else "error", **result}
 
 
