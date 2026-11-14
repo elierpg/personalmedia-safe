@@ -8,7 +8,7 @@ from pyrogram.errors import FloodWait, ChannelPrivate, ChatAdminRequired
 
 from Backend.logger import LOGGER
 from Backend.helper.encrypt import encode_string, decode_string
-from Backend.helper.manual_add import stamp_caption_with_id
+from Backend.helper.manual_add import quality_from_height, stamp_caption_with_id
 from Backend.helper.metadata import caption_with_links, extract_default_id, has_raw_ref, metadata
 from Backend.helper.pyro import apply_video_thumb_to_metadata, clean_filename, finalize_media_name, get_readable_file_size
 from Backend.helper.skip_channel import is_skip_channel, route_to_skip_channel
@@ -504,9 +504,17 @@ class ScanManager:
             LOGGER.warning(f"[ScanManager] Dup-check error msg {msg_id}: {e}")
 
         try:
+            q_hint = None
+            try:
+                vid = getattr(message, "video", None)
+                if vid and getattr(vid, "height", 0):
+                    q_hint = quality_from_height(int(vid.height))
+            except Exception:
+                q_hint = None
             metadata_info = await metadata(
                 clean_filename(title), channel_int, msg_id,
                 override_id=extract_default_id(caption_with_links(message)),
+                quality_hint=q_hint,
             )
         except Exception as e:
             LOGGER.warning(f"[ScanManager] Metadata exception for msg {msg_id}: {e}")

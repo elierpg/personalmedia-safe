@@ -66,6 +66,7 @@ async def metadata(
     msg_id,
     override_id: str = None,
     season_hint: int = None,
+    quality_hint: str = None,
 ) -> dict | None:
     if is_multipart_video(filename):
         LOGGER.info(f"Skipping {filename}: split video file not meant to be combined in Stremio")
@@ -142,9 +143,14 @@ async def metadata(
             absolute = True
             parsed["episode"] = abs_ep
 
+    if not quality and quality_hint:
+        quality = str(quality_hint).strip() or None
+        if quality:
+            parsed["quality"] = quality
     if not quality:
-        LOGGER.warning(f"Skipping {filename}: No resolution (parsed={parsed})")
-        return None
+        quality = "HD"
+        parsed["quality"] = quality
+        LOGGER.info(f"No resolution parsed for {filename}, defaulting quality to HD (parsed={parsed})")
     if not title:
         LOGGER.info(f"No title parsed from: {filename} (parsed={parsed})")
         return None

@@ -11,7 +11,7 @@ from Backend import db
 from Backend.helper.announcer import announce_new_media
 from Backend.helper.auto_catalog import start_single_media_catalog_sync
 from Backend.helper.encrypt import encode_string
-from Backend.helper.manual_add import resolve_telegram_message, stamp_caption_with_id
+from Backend.helper.manual_add import quality_from_height, resolve_telegram_message, stamp_caption_with_id
 from Backend.helper.metadata import caption_with_links, extract_default_id, has_raw_ref, metadata
 from Backend.helper.pyro import apply_video_thumb_to_metadata, clean_filename, finalize_media_name, get_readable_file_size, resolve_video_thumb_url
 from Backend.helper.settings_manager import SettingsManager
@@ -232,9 +232,10 @@ async def file_receive_handler(client: Client, message: Message):
             await message.reply_text("> Not supported")
             return
 
-        _, title, msg_id, raw_size, size, channel = _extract_fields(message)
+        file, title, msg_id, raw_size, size, channel = _extract_fields(message)
 
-        metadata_info = await metadata(clean_filename(title), int(channel), msg_id, override_id=override_id or extract_default_id(caption_with_links(message)), season_hint=season_hint)
+        q_hint = quality_from_height(getattr(file, "height", 0) or 0) if file else None
+        metadata_info = await metadata(clean_filename(title), int(channel), msg_id, override_id=override_id or extract_default_id(caption_with_links(message)), season_hint=season_hint, quality_hint=q_hint)
         if metadata_info is None:
             LOGGER.warning(f"Metadata failed for file: {title} (ID: {msg_id})")
             await route_to_skip_channel(client, message, db=db, reason="metadata_failed", index_placeholder=False)
@@ -274,7 +275,7 @@ async def file_edited_handler(client: Client, message: Message):
         if not _is_supported_media(message):
             return
 
-        _, title, msg_id, raw_size, size, channel = _extract_fields(message)
+        file, title, msg_id, raw_size, size, channel = _extract_fields(message)
         override_id = extract_default_id(caption_with_links(message))
         existing = await db.get_media_ids_by_part(int(channel), msg_id)
         if existing and (not override_id or _override_matches_indexed(override_id, existing[0], existing[1])):
@@ -288,7 +289,8 @@ async def file_edited_handler(client: Client, message: Message):
             return
 
         LOGGER.info(f"Detected override ID '{override_id}' in edited message {msg_id}")
-        metadata_info = await metadata(clean_filename(title), int(channel), msg_id, override_id=override_id)
+        q_hint = quality_from_height(getattr(file, "height", 0) or 0) if file else None
+        metadata_info = await metadata(clean_filename(title), int(channel), msg_id, override_id=override_id, quality_hint=q_hint)
         if metadata_info is None:
             LOGGER.warning(f"Metadata failed for edited file: {title} (ID: {msg_id})")
             return
