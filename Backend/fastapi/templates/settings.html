@@ -1378,6 +1378,7 @@ function renderSettings(s) {
     document.getElementById('delete_on_metadata_fail').checked = !!s.delete_on_metadata_fail;
     toggleGlobalSearchFields();
     toggleAnnouncementFields();
+    if (typeof sessLoadStatus === 'function') sessLoadStatus();
 
     // Plain text/number fields
     document.getElementById('admin_username').value = s.admin_username || '';
