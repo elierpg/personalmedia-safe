@@ -210,8 +210,28 @@ def get_readable_file_size(size_in_bytes):
 
 _HASHTAG_PATTERN = re.compile(r"#[\w\-]+", re.UNICODE)
 _RELEASE_NOISE_RE = re.compile(
-    r"(?im)^\s*(subtitulad[oa]s?|subtitulado|sub\.?|doblad[oa]s?|dual(?:\s*audio)?|latino|castellano|español|ingles|english|espanol|hd|full\s*hd|4k|webrip|bluray|bdrip|hdrip|estreno)\s*$"
+    r"(?im)^\s*(subtitulad[oa]s?|subtitulado|sub\.?|doblad[oa]s?|dual(?:\s*audio)?|multi(?:\s*aud(?:io)?)?|latino|castellano|español|ingles|english|espanol|hd|full\s*hd|4k|webrip|bluray|bdrip|hdrip|estreno)\s*$"
 )
+_CONCAT_EXT_RE = re.compile(r'(?i)\.(mkv|mp4|avi|ts|m4v|mov|wmv|webm|flv|m2ts|mpg|mpeg)(?=[A-Za-z0-9])')
+
+def _split_concatenated_titles(text: str) -> list[str]:
+    if not text:
+        return []
+    parts = _CONCAT_EXT_RE.split(text)
+    if len(parts) <= 1:
+        return [text]
+    segs = []
+    i = 0
+    # split keeps extension groups; reconstruct "prefix.ext" segments
+    while i < len(parts):
+        if i + 1 < len(parts) and parts[i+1].lower() in {"mkv","mp4","avi","ts","m4v","mov","wmv","webm","flv","m2ts","mpg","mpeg"}:
+            segs.append(parts[i] + "." + parts[i+1])
+            i += 2
+        else:
+            segs.append(parts[i])
+            i += 1
+    segs = [s.strip() for s in segs if s and s.strip()]
+    return segs or [text]
 
 def _pick_primary_title_line(text: str) -> str:
     if not text:
@@ -223,19 +243,26 @@ def _pick_primary_title_line(text: str) -> str:
     for ln in lines:
         if not ln:
             continue
-        ln2 = _HASHTAG_PATTERN.sub(" ", ln)
-        ln2 = re.sub(r"\s+", " ", ln2).strip(" -|•·")
-        if not ln2:
-            continue
-        if _RELEASE_NOISE_RE.match(ln2):
-            continue
-        # skip lines that are only hashtags/punctuation originally
-        if re.fullmatch(r"[\W_#]+", ln):
-            continue
-        cleaned_lines.append(ln2)
+        # handle concatenated titles inside a line
+        for seg in _split_concatenated_titles(ln):
+            ln2 = _HASHTAG_PATTERN.sub(" ", seg)
+            ln2 = re.sub(r"\s+", " ", ln2).strip(" -|•·")
+            if not ln2:
+                continue
+            if _RELEASE_NOISE_RE.match(ln2):
+                continue
+            if re.fullmatch(r"[\W_#]+", seg):
+                continue
+            cleaned_lines.append(ln2)
     if not cleaned_lines:
-        return text
-    # prefer first line that contains a year in parentheses/brackets or 4-digit year token
+        # fallback: try splitting whole text
+        for seg in _split_concatenated_titles(text):
+            seg2 = re.sub(r"\s+", " ", seg).strip()
+            if seg2:
+                cleaned_lines.append(seg2)
+        if not cleaned_lines:
+            return text
+    # prefer first line/segment that contains a year in parentheses/brackets or 4-digit year token
     year_re = re.compile(r"(?:\(|\[)?\b(19|20)\d{2}\b(?:\)|\])?")
     for ln in cleaned_lines:
         if year_re.search(ln):
@@ -246,8 +273,8 @@ def remove_urls(text):
     if not text:
         return ""
 
-    # For multi-line captions, pick the primary title line first (e.g. "Movie (2026)" above alt title/tags)
-    if "\n" in text or "\r" in text:
+    # For multi-line captions or concatenated titles, pick the primary title segment first
+    if "\n" in text or "\r" in text or _CONCAT_EXT_RE.search(text):
         text = _pick_primary_title_line(text)
 
     url_pattern = r'\b(?:(?:https?|ftp):\/\/|www\.)[^\s/$.?#].[^\s]*'
@@ -255,6 +282,8 @@ def remove_urls(text):
     # remove markdown/html-like links text noise
     text = re.sub(r'https?://\S+', '', text)
     text_without_urls = re.sub(url_pattern, '', text)
+    # remove bracketed channel tags like [@Dubbedmovies]
+    text_without_urls = re.sub(r'\[?\s*@[\w\.\-]+\s*\]?', ' ', text_without_urls)
     # remove hashtags and common noise words inline
     text_without_urls = _HASHTAG_PATTERN.sub(" ", text_without_urls)
     text_without_urls = re.sub(r"(?i)\b(subtitulad[oa]s?|subtitulado|doblad[oa]s?)\b", " ", text_without_urls)

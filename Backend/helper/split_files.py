@@ -4,6 +4,10 @@ from typing import Optional, Tuple
 _VIDEO_EXTENSIONS = r'mkv|mp4|avi|ts|m4v|mov|wmv|webm|flv|m2ts|mpg|mpeg'
 _ARCHIVE_EXTENSIONS = r'zip'
 _TRAILING_NUMERIC_PATTERN = re.compile(rf'(?i)\.({_VIDEO_EXTENSIONS}|{_ARCHIVE_EXTENSIONS})\.(\d{{2,3}})(?=$|\D)')
+# e.g. "file.part002.mkv", "file-part 2.mp4", "file part02.avi"
+_PART_BEFORE_EXT_PATTERN = re.compile(
+    rf'(?i)[\.\-_\s]part[\.\-_\s]*(\d{{1,3}})\.({_VIDEO_EXTENSIONS}|{_ARCHIVE_EXTENSIONS})(?=$|\D)'
+)
 _NORMALIZE_RE = re.compile(r'[\.\-_ ]+')
 _ARCHIVE_SET = {'zip'}
 
@@ -23,11 +27,14 @@ def _normalize(base: str) -> str:
     return _NORMALIZE_RE.sub('.', base).strip('.').lower()
 
 
-#----- Locate a trailing ".ext.NN" split-part marker in a name
+#----- Locate a split-part marker in a name
 def _find_split_match(name: str) -> Optional[Tuple[int, int, int, Optional[str]]]:
     m = _TRAILING_NUMERIC_PATTERN.search(name)
     if m:
         return m.start(), m.end(), int(m.group(2)), m.group(1)
+    m = _PART_BEFORE_EXT_PATTERN.search(name)
+    if m:
+        return m.start(), m.end(), int(m.group(1)), m.group(2)
     return None
 
 
