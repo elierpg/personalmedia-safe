@@ -23,8 +23,73 @@ _MULTIPART_RE = re.compile(r"(?:part|cd|disc|disk)[s._-]*\d+(?=\.\w+$)", re.IGNO
 # PTN does NOT parse by itself). Anything else falls through to the
 # absolute-episode logic below instead of guessing.
 _EXPLICIT_SXXEXX_RE = re.compile(r"(?i)\bs\d{1,2}[._\s-]*e\d{1,3}\b")
-_EXPLICIT_NXNN_RE = re.compile(r"(?i)\b\d{1,2}x\d{2,3}\b")
+_EXPLICIT_NXNN_RE = re.compile(r"(?i)\b\d{1,2}x\d{1,3}\b")
 _EXPLICIT_SEASON_WORD_RE = re.compile(r"(?i)\b(?:season|series)\s*0*\d{1,2}\b")
+# Resolution/quality/noise patterns used by episode/title cleanup
+_RES_WITH_P_RE = re.compile(r"(?i)(?<![\w])(?:240|360|480|576|720|1080|1440|2160|4320)p(?![\w])")
+_RES_BARE_TRAILING_RE = re.compile(
+    r"(?i)(?<![\w])(?:240|360|480|576|720|1080|1440|2160|4320)(?![\w])"
+    r"(?=(?:[\s._-]*(?:\.[a-z0-9]{2,4})?)$)"
+)
+_QUALITY_TOKEN_RE = re.compile(
+    r"(?i)(?:\d{3,4}x\d{3,4}|web-?dl|blu-?ray|bluray|hdtv|hdrip|webrip|bdrip|brrip|"
+    r"x264|x265|h\.?264|h\.?265|hevc|avc|aac|"
+    r"(?:ddp|dd\+?|e?ac-?3|dts(?:-?hd)?|truehd|atmos)\s*\d?(?:[\s.]\d)?|"
+    r"(?<!\d)\d[\s.]\d(?!\d)|10bit|8bit|"
+    r"multi(?:\s*audio)?|dual(?:\s*audio)?|esub|subs?|softsubs?|hardsubs?|"
+    r"(?<![\w])(?:bd|remux|encode)(?![\w]))"
+)
+_RELEASE_GROUP_RE = re.compile(r"\[[^\]]{1,40}\]")
+_TITLE_ABS_EP_RE = re.compile(
+    r"(?i)^(?P<title>.+?)\s*[-–—]?\s*0*(?P<ep>\d{2,4})\s*$"
+)
+_YEAR_RE = re.compile(r"(?:^|[\s._\-(])((?:19|20)\d{2})(?:[\s._\-)]|$)")
+
+# NxN episode markers, optionally prefixed by Spanish/English episode keywords
+_CAPITULO_NXNN_RE = re.compile(
+    r"(?i)\b(?:cap[ií]tulos?|cap\.?|episodios?|episode|ep\.?)\s*(?P<season>\d{1,2})x(?P<episode>\d{1,3})\b"
+)
+_NXNN_RE = re.compile(r"(?i)\b(?P<season>\d{1,2})x(?P<episode>\d{1,3})\b")
+
+
+def _extract_nxnn_episode(text: str):
+    """Extract (season, episode) from NxN forms like 16x02, capitulo 16x02, 15x6."""
+    if not text:
+        return None
+    m = _CAPITULO_NXNN_RE.search(text)
+    if not m:
+        m = _NXNN_RE.search(text)
+    if not m:
+        return None
+    try:
+        season = int(m.group("season"))
+        episode = int(m.group("episode"))
+    except Exception:
+        return None
+    if season <= 0 or episode <= 0:
+        return None
+    # avoid matching likely resolutions like 1920x1080 (handled elsewhere) though episode bound helps
+    if season > 99 or episode > 999:
+        return None
+    return season, episode, m.start(), m.end()
+
+
+def _clean_title_after_episode(title: str, name: str) -> str:
+    """Remove episode markers/noise from parsed title when we resolved SxE ourselves."""
+    t = (title or "").strip()
+    if not t:
+        # fall back to filename without extension
+        t = re.sub(r"\.[a-z0-9]{2,4}$", " ", name or "", flags=re.I)
+    t = _CAPITULO_NXNN_RE.sub(" ", t)
+    t = re.sub(r"(?i)\b(?:cap[ií]tulos?|cap\.?|episodios?|episode|ep\.?)\b", " ", t)
+    t = _NXNN_RE.sub(" ", t)
+    t = _EXPLICIT_SXXEXX_RE.sub(" ", t)
+    t = _RELEASE_GROUP_RE.sub(" ", t)
+    t = _QUALITY_TOKEN_RE.sub(" ", t)
+    t = re.sub(r"(?i)\b\d{3,4}p\b", " ", t)
+    t = _YEAR_RE.sub(" ", t)
+    t = re.sub(r"[\s._\-–—]+", " ", t).strip(" -:|")
+    return t or (title or "").strip()
 
 
 def parse_media_name(name: str) -> dict:
@@ -82,6 +147,23 @@ def parse_media_name(name: str) -> dict:
     except (TypeError, ValueError):
         pass
 
+    # Fallback: explicit NxN / "capitulo NxN" patterns often missed by PTN/guessit
+    # or misread (e.g. "La que se avecina capitulo 16x02", "15x6.mp4").
+    try:
+        has_se = parsed.get("season") is not None and parsed.get("episode") is not None
+    except Exception:
+        has_se = False
+    if not has_se:
+        nx = _extract_nxnn_episode(name)
+        if nx:
+            season, episode, _s, _e = nx
+            if parsed.get("season") is None:
+                parsed["season"] = season
+            if parsed.get("episode") is None:
+                parsed["episode"] = episode
+            # Clean title so provider search uses the show name, not "capitulo 16x02 ..."
+            parsed["title"] = _clean_title_after_episode(parsed.get("title") or "", name)
+
     return parsed
 
 
@@ -103,34 +185,6 @@ def is_multipart_video(filename: str) -> bool:
 
 # Absolute / orphan episode patterns (no SxxExx), e.g. "One Piece 1223 720.mkv"
 _SEASON_EP_RE = _EXPLICIT_SXXEXX_RE
-# Resolution with an explicit trailing 'p' (unambiguous quality marker)
-_RES_WITH_P_RE = re.compile(r"(?i)(?<![\w])(?:240|360|480|576|720|1080|1440|2160|4320)p(?![\w])")
-# Bare resolution value with NO trailing 'p' (e.g. "One Piece 1223 720.mkv") is
-# ambiguous with an absolute episode number that happens to equal a common
-# resolution (episode 240, 480, 720...). Only treat it as quality when it's the
-# trailing token right before the extension/end of string - conventionally
-# where quality sits - and it's applied only as a fallback when no proper
-# "NNNp" resolution was already found elsewhere in the name.
-_RES_BARE_TRAILING_RE = re.compile(
-    r"(?i)(?<![\w])(?:240|360|480|576|720|1080|1440|2160|4320)(?![\w])"
-    r"(?=(?:[\s._-]*(?:\.[a-z0-9]{2,4})?)$)"
-)
-# Quality / codec / audio tokens
-_QUALITY_TOKEN_RE = re.compile(
-    r"(?i)(?:\d{3,4}x\d{3,4}|web-?dl|blu-?ray|bluray|hdtv|hdrip|webrip|bdrip|brrip|"
-    r"x264|x265|h\.?264|h\.?265|hevc|avc|aac|"
-    r"(?:ddp|dd\+?|e?ac-?3|dts(?:-?hd)?|truehd|atmos)\s*\d?(?:[\s.]\d)?|"
-    r"(?<!\d)\d[\s.]\d(?!\d)|10bit|8bit|"
-    r"multi(?:\s*audio)?|dual(?:\s*audio)?|esub|subs?|softsubs?|hardsubs?|"
-    r"(?<![\w])(?:bd|remux|encode)(?![\w]))"
-)
-# Bracketed release-group tags: [Judas], [SubsPlease], etc.
-_RELEASE_GROUP_RE = re.compile(r"\[[^\]]{1,40}\]")
-# Trailing absolute ep after title: "One Piece - 1172" / "One Piece 1172"
-_TITLE_ABS_EP_RE = re.compile(
-    r"(?i)^(?P<title>.+?)\s*[-–—]?\s*0*(?P<ep>\d{2,4})\s*$"
-)
-_YEAR_RE = re.compile(r"(?:^|[\s._\-(])((?:19|20)\d{2})(?:[\s._\-)]|$)")
 
 
 def extract_absolute_episode(filename: str, parsed: dict | None = None) -> int | None:
