@@ -922,8 +922,8 @@ async def auth_exception_handler(request: Request, exc):
 
 #----- Skip-pending items (skip channel files awaiting metadata)
 @app.get("/api/admin/skip-pending")
-async def admin_list_skip_pending(_: bool = Depends(require_auth)):
-    return await list_skip_pending_api()
+async def admin_list_skip_pending(page: int = Query(1, ge=1), page_size: int = Query(30, ge=1, le=100), _: bool = Depends(require_auth)):
+    return await list_skip_pending_api(page=page, page_size=page_size)
 
 @app.delete("/api/admin/skip-pending/{pending_id}")
 async def admin_delete_skip_pending(pending_id: str, _: bool = Depends(require_auth)):

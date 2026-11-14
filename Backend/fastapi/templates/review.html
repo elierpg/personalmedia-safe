@@ -33,6 +33,7 @@
 
     <div id="review-status" class="text-sm text-text-secondary hidden"></div>
     <div id="skip-items" class="space-y-2"></div>
+    <div id="pagination" class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2"></div>
   </div>
 </div>
 
@@ -111,24 +112,31 @@
   let selectedIds = new Set();
   let asResults = [];
   let asPicked = null;
+  let currentPage = 1;
+  let pageSize = 25;
+  let pagination = { page: 1, page_size: 25, total: 0, total_pages: 1 };
 
   function esc(s){ return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
   function updateSelectionUI(){
+    const pageIds = skipItems.map(i => String(i.id));
+    const pageSelected = pageIds.filter(id => selectedIds.has(id)).length;
     const count = selectedIds.size;
-    document.getElementById('selection-count').textContent = `${count} seleccionados`;
+    document.getElementById('selection-count').textContent = `${count} seleccionados (${pageSelected} en esta página)`;
     document.getElementById('btn-batch-assign').disabled = count === 0;
     document.getElementById('btn-batch-delete').disabled = count === 0;
     const all = document.getElementById('select-all');
     if (all) {
-      all.checked = skipItems.length > 0 && count === skipItems.length;
-      all.indeterminate = count > 0 && count < skipItems.length;
+      all.checked = skipItems.length > 0 && pageSelected === skipItems.length;
+      all.indeterminate = pageSelected > 0 && pageSelected < skipItems.length;
     }
     renderItems();
   }
 
   function toggleSelectAll(checked){
-    selectedIds = checked ? new Set(skipItems.map(i => String(i.id))) : new Set();
+    const pageIds = skipItems.map(i => String(i.id));
+    if (checked) pageIds.forEach(id => selectedIds.add(id));
+    else pageIds.forEach(id => selectedIds.delete(id));
     updateSelectionUI();
   }
 
@@ -138,14 +146,42 @@
     updateSelectionUI();
   }
 
+  function renderPagination(){
+    const box = document.getElementById('pagination');
+    if (!box) return;
+    const p = pagination || {};
+    const total = p.total || 0;
+    const pages = p.total_pages || 1;
+    const page = p.page || currentPage || 1;
+    if (total === 0){ box.innerHTML = ''; return; }
+    const from = total ? ((page - 1) * (p.page_size || pageSize) + 1) : 0;
+    const to = Math.min(total, page * (p.page_size || pageSize));
+    let html = `<div class="text-xs sm:text-sm text-text-secondary">Mostrando ${from}-${to} de ${total}</div>`;
+    if (pages > 1){
+      html += `<div class="flex items-center gap-2">
+        <button class="px-3 py-1.5 rounded-lg border border-hairline text-sm font-semibold ${page <= 1 ? 'opacity-40 pointer-events-none' : ''}" onclick="goToPage(${page-1})"><i class="fa-solid fa-chevron-left"></i></button>
+        <span class="text-sm text-text-secondary">Página ${page} / ${pages}</span>
+        <button class="px-3 py-1.5 rounded-lg border border-hairline text-sm font-semibold ${page >= pages ? 'opacity-40 pointer-events-none' : ''}" onclick="goToPage(${page+1})"><i class="fa-solid fa-chevron-right"></i></button>
+      </div>`;
+    }
+    box.innerHTML = html;
+  }
+
+  function goToPage(p){
+    const pages = (pagination && pagination.total_pages) || 1;
+    if (p < 1 || p > pages) return;
+    loadSkipItems(p);
+  }
+
   function renderItems(){
     const box = document.getElementById('skip-items');
     if (!skipItems.length){
       box.innerHTML = '<div class="text-sm text-text-secondary p-4 text-center">No hay archivos pendientes en el canal de skip.</div>';
-      document.getElementById('items-count').textContent = '';
+      document.getElementById('items-count').textContent = pagination.total ? `· ${pagination.total} pendiente(s)` : '';
+      renderPagination();
       return;
     }
-    document.getElementById('items-count').textContent = `· ${skipItems.length} pendiente(s)`;
+    document.getElementById('items-count').textContent = `· ${pagination.total || skipItems.length} pendiente(s)`;
     box.innerHTML = skipItems.map(it => {
       const id = String(it.id);
       const checked = selectedIds.has(id);
@@ -166,19 +202,22 @@
         </div>
       </div>`;
     }).join('');
+    renderPagination();
   }
 
-  async function loadSkipItems(){
+  async function loadSkipItems(page){
+    if (page) currentPage = page;
     const status = document.getElementById('review-status');
     status.textContent = 'Cargando…'; status.classList.remove('hidden');
     try {
-      const res = await fetch('/api/admin/skip-pending');
+      const params = new URLSearchParams({ page: String(currentPage), page_size: String(pageSize) });
+      const res = await fetch(`/api/admin/skip-pending?${params.toString()}`);
       const data = await res.json().catch(()=>({}));
       if (!res.ok) throw new Error(data.detail || 'No se pudo cargar');
       skipItems = data.items || [];
-      // drop selections that no longer exist
-      const ids = new Set(skipItems.map(i=>String(i.id)));
-      selectedIds = new Set([...selectedIds].filter(id => ids.has(id)));
+      pagination = data.pagination || { page: currentPage, page_size: pageSize, total: skipItems.length, total_pages: 1 };
+      currentPage = pagination.page || currentPage;
+      // keep global selections (across pages) as-is; do not drop unless desired
       status.classList.add('hidden');
       updateSelectionUI();
     } catch(e){
@@ -196,7 +235,7 @@
       const data = await res.json().catch(()=>({}));
       if (!res.ok) throw new Error(data.detail || 'No se pudo sincronizar');
       showToast(data.message || 'Sincronizado.', 'success', 'Sync');
-      await loadSkipItems();
+      currentPage = 1; await loadSkipItems(1);
     } catch(e){
       status.textContent = e.message || 'Error al sincronizar.';
       showToast(e.message || 'Error al sincronizar.', 'error', 'Error');
@@ -211,7 +250,9 @@
       if (!res.ok) throw new Error(data.detail || 'No se pudo eliminar');
       selectedIds.delete(String(id));
       showToast(data.message || 'Eliminado.', 'success', 'Eliminar');
-      await loadSkipItems();
+      const pages = (pagination && pagination.total_pages) || 1;
+      if (currentPage > 1 && skipItems.length <= 1) currentPage -= 1;
+      await loadSkipItems(currentPage);
     } catch(e){ showToast(e.message || 'No se pudo eliminar.', 'error', 'Error'); }
   }
 
@@ -225,7 +266,7 @@
       if (!res.ok) throw new Error(data.detail || 'No se pudo eliminar');
       showToast(data.message || 'Eliminados.', data.status === 'success' ? 'success' : 'warning', 'Eliminar');
       selectedIds.clear();
-      await loadSkipItems();
+      await loadSkipItems(1);
     } catch(e){ showToast(e.message || 'No se pudo eliminar.', 'error', 'Error'); }
   }
 
@@ -303,10 +344,16 @@
       const data = await res.json().catch(()=>({}));
       if (!res.ok) throw new Error(data.detail || 'No se pudo aplicar');
       let msg = data.message || 'Aplicado.';
-      if (data.errors && data.errors.length){ msg += ' Revisa los archivos con error (pueden requerir T/E en el nombre para series).'; }
+      if (data.errors && data.errors.length){
+        const failed = new Set((data.errors || []).map(e => String(e.id)));
+        selectedIds = new Set([...selectedIds].filter(id => failed.has(String(id))));
+        msg += ' Revisa los archivos con error (pueden requerir T/E en el nombre para series).';
+      } else {
+        selectedIds.clear();
+        closeAssignModal();
+      }
       showToast(msg, data.status === 'success' ? 'success' : 'warning', 'Asignar metadata');
-      if (data.status === 'success') { selectedIds.clear(); closeAssignModal(); }
-      await loadSkipItems();
+      await loadSkipItems(data.status === 'success' ? 1 : currentPage);
     } catch(e){ showToast(e.message || 'No se pudo aplicar.', 'error', 'Error'); }
     finally { btn.disabled = false; btn.textContent = 'Aplicar a seleccionados'; }
   }

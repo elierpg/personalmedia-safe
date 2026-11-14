@@ -2994,8 +2994,16 @@ async def bot_admin_apply_status_api() -> dict:
 #  Skip-pending — files in skip channel awaiting metadata assignment
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def list_skip_pending_api() -> dict:
-    items = await db.list_skip_pending()
+async def list_skip_pending_api(page: int = 1, page_size: int = 30) -> dict:
+    try:
+        page = max(1, int(page or 1))
+        page_size = max(1, min(int(page_size or 30), 100))
+    except Exception:
+        page, page_size = 1, 30
+    all_items = await db.list_skip_pending(limit=5000)
+    total = len(all_items)
+    start = (page - 1) * page_size
+    items = all_items[start:start + page_size]
     out = []
     for it in items:
         size = int(it.get("file_size") or 0)
@@ -3013,7 +3021,8 @@ async def list_skip_pending_api() -> dict:
             "reason": it.get("reason"),
             "created_at": it.get("created_at"),
         })
-    return {"status": "success", "items": out}
+    total_pages = max(1, (total + page_size - 1) // page_size)
+    return {"status": "success", "items": out, "pagination": {"page": page, "page_size": page_size, "total": total, "total_pages": total_pages}}
 
 
 async def delete_skip_pending_api(pending_id: str) -> dict:
@@ -3310,14 +3319,17 @@ async def sync_skip_pending_api(limit: int = 100) -> dict:
     skip = settings.skip_channel
     if not skip:
         raise HTTPException(status_code=400, detail="No hay canal de skip configurado.")
-    client = _scan_client()
-    if client is None:
+    primary = _scan_client()
+    if primary is None and getattr(botmod, 'Userbot', None) is None:
         raise HTTPException(status_code=503, detail="No Telegram client is connected yet.")
     skip_chat = int(skip) if str(skip).lstrip("-").replace("-100", "").isdigit() else skip
     added = 0
     scanned = 0
-    try:
-        async for msg in client.get_chat_history(skip_chat, limit=max(1, min(int(limit or 100), 500))):
+    max_limit = max(1, min(int(limit or 100), 500))
+
+    async def _scan_with(client):
+        nonlocal added, scanned
+        async for msg in client.get_chat_history(skip_chat, limit=max_limit):
             scanned += 1
             if not msg or getattr(msg, "empty", False):
                 continue
@@ -3335,7 +3347,27 @@ async def sync_skip_pending_api(limit: int = 100) -> dict:
             from Backend.helper.skip_channel import record_skip_pending
             await record_skip_pending(db, int(chat_id), int(msg.id), msg, reason="imported_from_skip_channel")
             added += 1
+
+    try:
+        client = primary or botmod.Userbot
+        await _scan_with(client)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"No se pudo leer el canal de skip: {e}")
+        err = str(e)
+        # Bots cannot use get_chat_history; try userbot if available
+        if "BOT_METHOD_INVALID" in err or "can't be used by bots" in err.lower():
+            userbot = getattr(botmod, "Userbot", None)
+            if userbot is not None and userbot is not (primary or None):
+                try:
+                    added = 0
+                    scanned = 0
+                    await _scan_with(userbot)
+                except Exception as e2:
+                    raise HTTPException(status_code=500, detail=f"No se pudo leer el canal de skip: {e2}")
+            elif userbot is not None and primary is None:
+                raise HTTPException(status_code=500, detail=f"No se pudo leer el canal de skip: {e}")
+            else:
+                raise HTTPException(status_code=500, detail="No se pudo leer el canal de skip: los bots no pueden leer historial. Configura/inicia la sesión de usuario (userbot) en Ajustes o usa la importación desde ahí.")
+        else:
+            raise HTTPException(status_code=500, detail=f"No se pudo leer el canal de skip: {e}")
     return {"status": "success", "message": f"Sincronizado: {added} nuevo(s) de {scanned} mensajes revisados.", "added": added, "scanned": scanned}
 
