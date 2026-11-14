@@ -16,7 +16,7 @@ from Backend.helper.split_files import parse_split_info
 from Backend.helper.subtitles import ingest_subtitle, is_subtitle_file
 
 SCAN_BATCH_SIZE = 200          
-SCAN_MAX_EMPTY_BATCHES = 500   
+SCAN_MAX_EMPTY_BATCHES = 10    
 SCAN_MAX_ID_CAP = 1_000_000    
 SCAN_BATCH_DELAY = 0.5         
 SCAN_PERSIST_EVERY = 1         
@@ -84,7 +84,6 @@ class ScanManager:
             "updated_at": 0.0,
             "finished_at": 0.0,
             "error": None,
-            "debug": {},
         }
 
     @staticmethod
@@ -167,7 +166,6 @@ class ScanManager:
             "elapsed": _fmt_elapsed(elapsed),
             "elapsed_seconds": int(elapsed),
             "error": s["error"],
-            "debug": dict(s.get("debug") or {}),
         }
 
     async def _stream_id_exists(self, channel: int, msg_id: int) -> bool:
@@ -234,9 +232,6 @@ class ScanManager:
                     self.state["selected_channels"] = list(channels)
                     self.state["pending"] = list(channels)
                     self.state["counters"] = self._blank_counters()
-                    # Reset cursors for selected channels so a fresh scan pass processes them (shows real stats)
-                    for ch in channels:
-                        self.state["cursors"].pop(str(ch), None)
 
             self.state["mode"] = mode
             self.state["status"] = "running"
@@ -343,14 +338,6 @@ class ScanManager:
         s["current_target_id"] = last_id if use_probe else 0
 
         current = int(s["cursors"].get(str(ch_key), 1) or 1)
-        s["debug"] = {
-            "channel": str(ch_key),
-            "probe_last_id": last_id,
-            "use_probe": use_probe,
-            "start_id": current,
-            "batches": 0,
-            "messages_seen": 0,
-        }
         LOGGER.info(
             f"[ScanManager] Scanning {s['current_channel_name']} ({chat_id}) from id {current}"
             + (f" up to {last_id} (probe)" if use_probe else " (heuristic mode — probe unavailable)")
@@ -406,7 +393,6 @@ class ScanManager:
 
             if to_process:
                 s["counters"]["total_found"] += len(to_process)
-                s["debug"]["messages_seen"] = s["debug"].get("messages_seen", 0) + len(to_process)
                 sem = asyncio.Semaphore(SCAN_PROCESS_CONCURRENCY)
 
                 async def _worker(msg):
@@ -430,7 +416,6 @@ class ScanManager:
             s["current_id"] = current
 
             batch_count += 1
-            s["debug"]["batches"] = batch_count
             if batch_count % SCAN_PERSIST_EVERY == 0:
                 await self._persist()
 
@@ -451,31 +436,20 @@ class ScanManager:
                 probe = await client.send_message(chat_id, SCAN_PROBE_TEXT)
             except Exception as ex:
                 LOGGER.warning(f"[ScanManager] Probe send failed for {chat_id}: {ex}")
-                probe = None
+                return None
         except Exception as e:
             LOGGER.warning(f"[ScanManager] Could not send probe to {chat_id}: {e}")
-            probe = None
+            return None
 
-        if probe is not None:
-            last_id = getattr(probe, "id", None)
-            try:
-                await client.delete_messages(chat_id, probe.id)
-            except Exception as e:
-                LOGGER.warning(
-                    f"[ScanManager] Could not delete probe message "
-                    f"{getattr(probe, 'id', None)} in {chat_id}: {e}"
-                )
-            return last_id
-
-        # Fallback: infer latest message id from chat history (no send permission required)
+        last_id = getattr(probe, "id", None)
         try:
-            async for msg in client.get_chat_history(chat_id, limit=1):
-                if msg and getattr(msg, "id", None):
-                    LOGGER.info(f"[ScanManager] Probe fallback: using latest history id {msg.id} for {chat_id}")
-                    return int(msg.id)
+            await client.delete_messages(chat_id, probe.id)
         except Exception as e:
-            LOGGER.warning(f"[ScanManager] History fallback failed for {chat_id}: {e}")
-        return None
+            LOGGER.warning(
+                f"[ScanManager] Could not delete probe message "
+                f"{getattr(probe, 'id', None)} in {chat_id}: {e}"
+            )
+        return last_id
 
     async def _process_message(self, client, message, chat_id: int) -> None:
         s = self.state
