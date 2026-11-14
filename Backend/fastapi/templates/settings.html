@@ -500,6 +500,103 @@
         </div>
     </div>
 
+    <!-- ── Telegram User Session ──────────────────────────────────────── -->
+    <div class="settings-card">
+        <h2><i class="fa-solid fa-user-lock"></i> Sesión de usuario de Telegram</h2>
+        <p class="bk-desc">
+            Inicia sesión con tu número de teléfono para generar la sesión de usuario automáticamente, sin cadena de sesión manual.
+            Se guarda cifrada de forma segura y habilita la Búsqueda global.
+        </p>
+
+        <div id="sess-loading" style="color:var(--text-sec);font-size:0.85rem">
+            <i class="fa-solid fa-spinner fa-spin"></i> Comprobando sesión…
+        </div>
+
+        <!-- Connected view -->
+        <div id="sess-connected" style="display:none">
+            <div class="sess-profile">
+                <div class="sess-avatar"><i class="fa-solid fa-user-astronaut"></i></div>
+                <div style="min-width:0;flex:1">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span id="sess-name" style="font-weight: 600"></span>
+                        <span id="sess-live" class="sess-pill"></span>
+                    </div>
+                    <div id="sess-username" style="color:var(--text-sec);font-size:0.82rem"></div>
+                </div>
+            </div>
+            <div class="sess-grid">
+                <div><span class="sess-k">Teléfono</span><span id="sess-phone" class="sess-v">—</span></div>
+                <div><span class="sess-k">ID de Telegram</span><span id="sess-id" class="sess-v">—</span></div>
+            </div>
+            <div class="flex flex-wrap gap-2 mt-4">
+                <button type="button" class="sess-btn" onclick="sessAction('reconnect')"><i class="fa-solid fa-rotate"></i> Reconectar</button>
+                <button type="button" class="sess-btn warn" onclick="sessAction('disconnect')"><i class="fa-solid fa-plug-circle-xmark"></i> Desconectar</button>
+                <button type="button" class="sess-btn danger" onclick="sessRemove()"><i class="fa-solid fa-trash"></i> Eliminar</button>
+            </div>
+        </div>
+
+        <!-- Login flow -->
+        <div id="sess-login" style="display:none">
+            <div id="sess-step-phone">
+                <label class="s-label">Número de teléfono (con código de país)</label>
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <input id="sess-phone-input" class="s-input" placeholder="+34123456789" style="flex:1">
+                    <button type="button" class="sess-btn primary" onclick="sessSendCode()"><i class="fa-solid fa-paper-plane"></i> Enviar código</button>
+                </div>
+            </div>
+            <div id="sess-step-code" style="display:none;margin-top:0.85rem">
+                <label class="s-label">Código de inicio de sesión (enviado por Telegram)</label>
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <input id="sess-code-input" class="s-input" inputmode="numeric" placeholder="1 2 3 4 5" style="flex:1">
+                    <button type="button" class="sess-btn primary" onclick="sessVerifyCode()"><i class="fa-solid fa-check"></i> Verificar</button>
+                </div>
+            </div>
+            <div id="sess-step-pass" style="display:none;margin-top:0.85rem">
+                <label class="s-label">Contraseña de verificación en dos pasos</label>
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <input id="sess-pass-input" type="password" class="s-input" placeholder="Tu contraseña 2FA" style="flex:1">
+                    <button type="button" class="sess-btn primary" onclick="sessVerifyPassword()"><i class="fa-solid fa-lock-open"></i> Confirmar</button>
+                </div>
+            </div>
+            <p id="sess-msg" style="font-size:0.8rem;margin-top:0.7rem;display:none"></p>
+        </div>
+
+        {% if userbot_configured %}
+        <hr class="divider">
+        <label class="toggle-wrap">
+            <input type="checkbox" class="toggle-input" id="default_streaming"
+                {% if settings.default_streaming == 'userbot' %}checked{% endif %}>
+            <span class="toggle-track"></span>
+            <span class="toggle-label">
+                <strong>Streaming por defecto: Userbot</strong>
+                <span style="color:var(--text-sec);font-size:0.8rem;display:block">
+                    Desactivado: la biblioteca se reproduce con bots (por defecto). Activado: se reproduce con el userbot, con respaldo en bots si falla.
+                    Los resultados de Búsqueda global siempre usan el userbot.
+                </span>
+            </span>
+        </label>
+        {% endif %}
+    </div>
+
+    <style>
+    .sess-profile { display:flex; align-items:center; gap:0.9rem; padding:1rem; border-radius:0.9rem; border:1px solid var(--border); background:color-mix(in srgb,var(--card) 90%,var(--bg)); }
+    .sess-avatar { width:3rem; height:3rem; border-radius:9999px; display:flex; align-items:center; justify-content:center; font-size:1.2rem; background:color-mix(in srgb,var(--primary) 18%,transparent); color:var(--primary); flex-shrink:0; }
+    .sess-grid { display:grid; grid-template-columns:1fr 1fr; gap:0.75rem; margin-top:0.85rem; }
+    @media (max-width:520px){ .sess-grid { grid-template-columns:1fr; } }
+    .sess-grid > div { padding:0.7rem 0.9rem; border-radius:0.8rem; border:1px solid var(--border); background:color-mix(in srgb,var(--card) 92%,var(--bg)); }
+    .sess-k { display:block; font-size:0.68rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-sec); font-weight: 600; }
+    .sess-v { display:block; font-weight: 600; margin-top:0.2rem; word-break:break-all; }
+    .sess-pill { font-size:0.62rem; font-weight: 600; text-transform:uppercase; letter-spacing:0.05em; padding:0.15rem 0.55rem; border-radius:9999px; }
+    .sess-pill.on { background:color-mix(in srgb, var(--ok) 13%, transparent); color:var(--ok); }
+    .sess-pill.off { background:color-mix(in srgb, var(--warn) 13%, transparent); color:var(--warn); }
+    .sess-btn { display:inline-flex; align-items:center; gap:0.5rem; padding:0.6rem 1.1rem; border-radius:9999px; font-weight: 600; font-size:0.82rem; cursor:pointer; border:1px solid var(--border); background:color-mix(in srgb,var(--card) 92%,var(--bg)); color:var(--text); transition:all .15s; }
+    .sess-btn:hover { border-color:var(--primary); }
+    .sess-btn.primary { background:var(--primary); color:var(--on-primary); border-color:transparent; }
+    .sess-btn.warn { color:var(--warn); }
+    .sess-btn.danger { color:var(--danger); }
+    </style>
+
+
     <!-- ── Manual Add Channels ─────────────────────────────────────────── -->
     <div class="settings-card">
         <h2><i class="fa-solid fa-hand-pointer"></i> Manual Add Channels</h2>
@@ -1513,6 +1610,125 @@ async function restartApp() {
         }
     }, 2000);
 }
+
+
+/* ── Telegram User Session ─────────────────────────────────────────────── */
+let sessLoginId = null;
+
+async function sessLoadStatus() {
+    const loading = document.getElementById('sess-loading');
+    const connected = document.getElementById('sess-connected');
+    const login = document.getElementById('sess-login');
+    if (!loading) return;
+    try {
+        const res = await fetch('/api/admin/settings/session');
+        const data = await res.json();
+        loading.style.display = 'none';
+        if (data.connected && data.profile) {
+            const p = data.profile;
+            document.getElementById('sess-name').textContent = p.name || 'Usuario de Telegram';
+            document.getElementById('sess-username').textContent = p.username ? '@' + p.username : 'Sin nombre de usuario';
+            document.getElementById('sess-phone').textContent = p.phone || '—';
+            document.getElementById('sess-id').textContent = p.user_id || '—';
+            const live = document.getElementById('sess-live');
+            live.className = 'sess-pill ' + (data.live ? 'on' : 'off');
+            live.textContent = data.live ? 'Conectada' : 'Guardada (reinicia para activar)';
+            connected.style.display = '';
+            login.style.display = 'none';
+        } else {
+            connected.style.display = 'none';
+            login.style.display = '';
+            sessShowStep('phone');
+        }
+    } catch (e) {
+        loading.textContent = 'No se pudo cargar el estado de la sesión.';
+    }
+}
+
+function sessShowStep(step) {
+    document.getElementById('sess-step-phone').style.display = step === 'phone' ? '' : 'none';
+    document.getElementById('sess-step-code').style.display = step === 'code' ? '' : 'none';
+    document.getElementById('sess-step-pass').style.display = step === 'pass' ? '' : 'none';
+}
+
+function sessMsg(text, ok) {
+    const el = document.getElementById('sess-msg');
+    el.style.display = '';
+    el.style.color = ok ? 'var(--ok)' : 'var(--danger)';
+    el.textContent = text;
+}
+
+async function sessSendCode() {
+    const phone = document.getElementById('sess-phone-input').value.trim();
+    if (!phone) return sessMsg('Introduce tu número de teléfono.', false);
+    sessMsg('Enviando código…', true);
+    try {
+        const res = await fetch('/api/admin/settings/session/send-code', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'No se pudo enviar el código');
+        sessLoginId = data.login_id;
+        sessShowStep('code');
+        sessMsg('Código enviado. Revisa tu app de Telegram.', true);
+    } catch (e) { sessMsg(e.message, false); }
+}
+
+async function sessVerifyCode() {
+    const code = document.getElementById('sess-code-input').value.trim();
+    if (!code) return sessMsg('Introduce el código de inicio de sesión.', false);
+    sessMsg('Verificando…', true);
+    try {
+        const res = await fetch('/api/admin/settings/session/verify-code', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ login_id: sessLoginId, code })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'La verificación falló');
+        if (data.status === 'password_needed') {
+            sessShowStep('pass');
+            sessMsg('Esta cuenta tiene verificación en dos pasos. Introduce tu contraseña.', true);
+            return;
+        }
+        showToast('Sesión creada correctamente.', 'success', 'Telegram');
+        sessLoadStatus();
+    } catch (e) { sessMsg(e.message, false); }
+}
+
+async function sessVerifyPassword() {
+    const password = document.getElementById('sess-pass-input').value;
+    if (!password) return sessMsg('Introduce tu contraseña 2FA.', false);
+    sessMsg('Confirmando…', true);
+    try {
+        const res = await fetch('/api/admin/settings/session/verify-password', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ login_id: sessLoginId, password })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'La verificación falló');
+        showToast('Sesión creada correctamente.', 'success', 'Telegram');
+        sessLoadStatus();
+    } catch (e) { sessMsg(e.message, false); }
+}
+
+async function sessAction(kind) {
+    try {
+        const res = await fetch('/api/admin/settings/session/' + kind, { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'La acción falló');
+        showToast(kind === 'reconnect' ? 'Reconectada.' : 'Desconectada.', 'info', 'Telegram');
+        sessLoadStatus();
+    } catch (e) { showToast(e.message, 'error', 'Telegram'); }
+}
+
+async function sessRemove() {
+    if (!confirm('¿Eliminar la sesión de Telegram guardada? La búsqueda global dejará de funcionar hasta que inicies sesión de nuevo.')) return;
+    try {
+        const res = await fetch('/api/admin/settings/session', { method: 'DELETE' });
+        if (!res.ok) throw new Error();
+        showToast('Sesión eliminada.', 'info', 'Telegram');
+        sessLoadStatus();
+    } catch (e) { showToast('No se pudo eliminar la sesión.', 'error', 'Telegram'); }
+}
+
 
 /* Run after DOMContentLoaded so base.html helpers (showToast) are defined —
    the base script that defines showToast is parsed after this block, so calling
